@@ -1,13 +1,11 @@
 use std::pin::Pin;
-use std::task::{Context, Poll};
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use bytes::Bytes;
 use futures::{Stream, StreamExt};
-use pin_project_lite::pin_project;
-use shr_crypto::{ChunkEncryptor, EphemeralKeyPair, Pin as ShrPin, ShareId, CHUNK_PLAINTEXT_SIZE};
+use shr_crypto::{EphemeralKeyPair, Pin as ShrPin, ShareId};
 use shr_protocol::{JoinRequest, JoinResponse, LocalShareInfo, ShareKind, ShareMode};
-use shr_transfer::ByteSource;
+use shr_transfer::{ByteSource, EncryptedFrameStream};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 use zeroize::Zeroizing;
@@ -82,7 +80,10 @@ impl SessionState {
         }
 
         let client_key = decode_key(&request.client_public_key)?;
-        let session_keys = self.keypair.complete(&client_key).map_err(|_| LocalError::InvalidJoin)?;
+        let session_keys = self
+            .keypair
+            .complete(&client_key)
+            .map_err(|_| LocalError::InvalidJoin)?;
 
         let token = Uuid::new_v4().to_string();
         *self.join.lock().await = Some(ActiveJoin {
@@ -99,7 +100,12 @@ impl SessionState {
     pub async fn open_stream(
         &self,
         token: &str,
-    ) -> Result<EncryptedBodyStream, LocalError> {
+    ) -> Result<
+        EncryptedFrameStream<
+            Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>,
+        >,
+        LocalError,
+    > {
         if *self.consumed.lock().await {
             return Err(LocalError::Busy);
         }
@@ -130,7 +136,7 @@ impl SessionState {
         let byte_stream: Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>> =
             Box::pin(byte_stream);
 
-        Ok(EncryptedBodyStream::new(content_key, byte_stream))
+        Ok(EncryptedFrameStream::new(content_key, byte_stream))
     }
 }
 
@@ -144,67 +150,4 @@ fn decode_key(encoded: &str) -> Result<[u8; 32], LocalError> {
     let mut key = [0u8; 32];
     key.copy_from_slice(&bytes);
     Ok(key)
-}
-
-pin_project! {
-    pub struct EncryptedBodyStream {
-        encryptor: ChunkEncryptor,
-        #[pin]
-        inner: Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>,
-        buffer: Vec<u8>,
-    }
-}
-
-impl EncryptedBodyStream {
-    fn new(
-        content_key: Zeroizing<[u8; 32]>,
-        inner: Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>,
-    ) -> Self {
-        Self {
-            encryptor: ChunkEncryptor::new(content_key),
-            inner,
-            buffer: Vec::new(),
-        }
-    }
-}
-
-impl Stream for EncryptedBodyStream {
-    type Item = Result<Bytes, std::io::Error>;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let mut this = self.project();
-
-        loop {
-            if this.buffer.len() >= CHUNK_PLAINTEXT_SIZE {
-                let chunk: Vec<u8> = this.buffer.drain(..CHUNK_PLAINTEXT_SIZE).collect();
-                match this.encryptor.encrypt_chunk(&chunk) {
-                    Ok(frame) => return Poll::Ready(Some(Ok(Bytes::from(frame)))),
-                    Err(e) => return Poll::Ready(Some(Err(std::io::Error::other(e.to_string())))),
-                }
-            }
-
-            match this.inner.as_mut().poll_next(cx) {
-                Poll::Ready(Some(Ok(data))) => {
-                    this.buffer.extend_from_slice(&data);
-                }
-                Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(e))),
-                Poll::Ready(None) => {
-                    if this.buffer.is_empty() {
-                        return Poll::Ready(None);
-                    }
-                    let tail: Vec<u8> = this.buffer.drain(..).collect();
-                    match this.encryptor.encrypt_chunk(&tail) {
-                        Ok(frame) => return Poll::Ready(Some(Ok(Bytes::from(frame)))),
-                        Err(e) => return Poll::Ready(Some(Err(std::io::Error::other(e.to_string())))),
-                    }
-                }
-                Poll::Pending => {
-                    if this.buffer.is_empty() {
-                        return Poll::Pending;
-                    }
-                    continue;
-                }
-            }
-        }
-    }
 }

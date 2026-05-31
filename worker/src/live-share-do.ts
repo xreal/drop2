@@ -39,7 +39,13 @@ export class LiveShareDO extends DurableObject<Env> {
   >();
 
   async fetch(request: Request): Promise<Response> {
+    await this.loadState();
     const url = new URL(request.url);
+
+    if (url.pathname.endsWith('/connect') && request.method === 'GET') {
+      return this.handleConnect(request);
+    }
+
     const path = url.pathname;
 
     if (path === '/init' && request.method === 'POST') {
@@ -50,9 +56,6 @@ export class LiveShareDO extends DurableObject<Env> {
     }
     if (path === '/admit' && request.method === 'POST') {
       return this.handleAdmit(request);
-    }
-    if (path === '/connect' && request.method === 'GET') {
-      return this.handleConnect(request);
     }
     if (path === '/cancel' && request.method === 'POST') {
       return this.handleCancel(request);

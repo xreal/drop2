@@ -43,7 +43,10 @@ export default {
       /^\/api\/v1\/live\/([A-Za-z0-9]{6})\/connect$/,
     );
     if (liveConnect && request.method === 'GET') {
-      return proxyToDo(liveConnect[1], env, '/connect', request);
+      if (!isValidShareId(liveConnect[1])) {
+        return jsonError('invalid share id', 400);
+      }
+      return doStub(env, liveConnect[1]).fetch(request);
     }
 
     const liveDelete = url.pathname.match(

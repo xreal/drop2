@@ -14,10 +14,12 @@ crc32fast = "1.4"
 futures = "0.3"
 os_pipe = "1.2"
 pin-project-lite = "0.2"
+shr-crypto = { path = "../shr-crypto" }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["fs", "io-util", "sync"] }
 tokio-util = { workspace = true, features = ["io"] }
 walkdir.workspace = true
+zeroize.workspace = true
 zip.workspace = true
 
 [dev-dependencies]
