@@ -4,6 +4,13 @@ import type { LiveShareStatus, ShareKind, WsControl } from './protocol';
 import { pruneAbuseTracking, recordFailedPin } from './abuse-tracking';
 import { verifyPin, pinRequired } from './pin';
 import { isValidShareId } from './share-id';
+import { accessDenied, jsonError, ErrorMsg } from './api-errors';
+import { hashIp } from './ip-hash';
+import {
+  clearGlobalAccessFailures,
+  globalIpBlocked,
+  recordGlobalAccessFailure,
+} from './access-guard';
 
 interface StoredState {
   share_id: string;
@@ -127,6 +134,10 @@ export class LiveShareDO extends DurableObject<Env> {
     if ('error' in state) return denyAccess();
     const s = state;
 
+    if (await globalIpBlocked(this.env, request)) {
+      return denyAccess();
+    }
+
     if (s.status === 'expired' || s.status === 'cancelled' || s.status === 'completed') {
       return denyAccess();
     }
@@ -141,11 +152,11 @@ export class LiveShareDO extends DurableObject<Env> {
     try {
       body = await request.json();
     } catch {
-      return json({ error: 'invalid body' }, 400);
+      return json({ error: ErrorMsg.INVALID_REQUEST }, 400);
     }
 
     const clientKey = body.client_public_key;
-    if (!clientKey) return json({ error: 'missing client key' }, 400);
+    if (!clientKey) return json({ error: ErrorMsg.INVALID_REQUEST }, 400);
 
     const ip = request.headers.get('x-shr-ip') ?? 'unknown';
     const ipKey = await hashIp(ip);
@@ -154,12 +165,16 @@ export class LiveShareDO extends DurableObject<Env> {
 
     const cooldown = s.cooldown_until[ipKey] ?? 0;
     if (now < cooldown) {
+      await recordGlobalAccessFailure(this.env, request);
       return denyAccess();
     }
 
     if (pinRequired(s.pin_hash)) {
       const pin = body.pin;
-      if (!pin) return denyAccess();
+      if (!pin) {
+        await recordGlobalAccessFailure(this.env, request);
+        return denyAccess();
+      }
       const ok = await verifyPin(pin, s.pin_salt, s.pin_hash);
       if (!ok) {
         const fails = (s.failed_pins[ipKey] ?? 0) + 1;
@@ -167,7 +182,8 @@ export class LiveShareDO extends DurableObject<Env> {
         recordFailedPin(s, ipKey, cooldownUntil);
         this.pruneAbuseTracking(now);
         await this.persist();
-        return json({ error: 'access denied' }, 403);
+        await recordGlobalAccessFailure(this.env, request);
+        return denyAccess();
       }
     }
 
@@ -176,6 +192,8 @@ export class LiveShareDO extends DurableObject<Env> {
       delete s.cooldown_until[ipKey];
       this.pruneAbuseTracking(now);
     }
+
+    await clearGlobalAccessFailures(this.env, request);
 
     s.join_version += 1;
     const version = s.join_version;
@@ -384,7 +402,7 @@ export class LiveShareDO extends DurableObject<Env> {
 
   private requireState(): StoredState | { error: Response } {
     if (!this.state) {
-      return { error: json({ error: 'share not found' }, 404) };
+      return { error: json({ error: 'share unavailable' }, 404) };
     }
     return this.state;
   }
@@ -420,21 +438,10 @@ function terminalStatus(status: LiveShareStatus): boolean {
   );
 }
 
-async function hashIp(ip: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(`shr.v1.ip:${ip}`),
-  );
-  return [...new Uint8Array(digest)]
-    .slice(0, 16)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status });
 }
 
 function denyAccess(): Response {
-  return json({ error: 'access denied' }, 403);
+  return accessDenied();
 }

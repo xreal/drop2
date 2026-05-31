@@ -6,6 +6,7 @@ import {
   createFrameState,
   finalizeEncryptedFrames,
 } from './frame-stream.js';
+import { mapApiError, UserMsg } from './errors.js';
 
 const enc = new TextEncoder();
 
@@ -67,7 +68,7 @@ export async function downloadStoredShare({
   const accessBody = {};
   if (info.pin_required) {
     const pin = prompt('Enter 4-digit PIN');
-    if (!pin) throw new Error('PIN required');
+    if (!pin) throw new Error(UserMsg.PIN_REQUIRED);
     accessBody.pin = pin;
   }
 
@@ -78,7 +79,7 @@ export async function downloadStoredShare({
   });
   if (!accessRes.ok) {
     const err = await accessRes.json().catch(() => ({}));
-    throw new Error(err.error || 'Access denied');
+    throw new Error(mapApiError(err));
   }
   const access = await accessRes.json();
 

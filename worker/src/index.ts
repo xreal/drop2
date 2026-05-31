@@ -1,6 +1,8 @@
 import { LiveShareDO } from './live-share-do';
 import type { Env } from './types';
 import { generateShareId, isValidShareId } from './share-id';
+import { jsonError } from './api-errors';
+import { runCleanup } from './cleanup';
 import {
   accessStoredShare,
   completeStoredShare,
@@ -126,6 +128,10 @@ export default {
     }
 
     return new Response('Not found', { status: 404 });
+  },
+
+  async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
+    await runCleanup(env);
   },
 };
 
@@ -295,10 +301,6 @@ async function cancelLiveShare(
   );
 
   return new Response(res.body, { status: res.status });
-}
-
-function jsonError(message: string, status: number): Response {
-  return Response.json({ error: message }, { status });
 }
 
 async function handleCreateStored(

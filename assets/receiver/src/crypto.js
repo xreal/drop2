@@ -7,6 +7,7 @@ import {
   finalizeEncryptedFrames,
 } from './frame-stream.js';
 import { downloadStoredShare, parseCapabilityFragment } from './stored-crypto.js';
+import { mapApiError, UserMsg } from './errors.js';
 
 const enc = new TextEncoder();
 
@@ -43,11 +44,11 @@ export async function loadShareInfo(ctx) {
       return storedRes.json();
     }
     const liveRes = await fetch(`/api/v1/live/${ctx.shareId}`);
-    if (!liveRes.ok) throw new Error('Share unavailable');
+    if (!liveRes.ok) throw new Error(UserMsg.SHARE_UNAVAILABLE);
     return liveRes.json();
   }
   const res = await fetch('/api/info');
-  if (!res.ok) throw new Error('Could not load share info');
+  if (!res.ok) throw new Error(UserMsg.SHARE_UNAVAILABLE);
   return res.json();
 }
 
@@ -82,7 +83,7 @@ async function joinLocal({ info, onProgress, onStatus }) {
   };
   if (info.pin_required) {
     const pin = prompt('Enter 4-digit PIN');
-    if (!pin) throw new Error('PIN required');
+    if (!pin) throw new Error(UserMsg.PIN_REQUIRED);
     joinBody.pin = pin;
   }
 
@@ -92,7 +93,7 @@ async function joinLocal({ info, onProgress, onStatus }) {
     body: JSON.stringify(joinBody),
   });
   if (!joinRes.ok) {
-    throw new Error(await joinRes.text());
+    throw new Error(UserMsg.ACCESS_DENIED);
   }
   const join = await joinRes.json();
 
@@ -128,7 +129,7 @@ async function joinHosted({ ctx, info, onProgress, onStatus }) {
   };
   if (info.pin_required) {
     const pin = prompt('Enter 4-digit PIN');
-    if (!pin) throw new Error('PIN required');
+    if (!pin) throw new Error(UserMsg.PIN_REQUIRED);
     accessBody.pin = pin;
   }
 
@@ -139,7 +140,7 @@ async function joinHosted({ ctx, info, onProgress, onStatus }) {
   });
   if (!accessRes.ok) {
     const err = await accessRes.json().catch(() => ({}));
-    throw new Error(err.error || 'Access denied');
+    throw new Error(mapApiError(err));
   }
   const access = await accessRes.json();
 
@@ -205,7 +206,7 @@ function receiveWebSocket(wsUrl, contentKey, onProgress, expectedBytes) {
     ws.onerror = () => {
       if (!settled) {
         settled = true;
-        reject(new Error('Connection failed'));
+        reject(new Error(UserMsg.CONNECTION_FAILED));
       }
     };
     ws.onclose = () => {
@@ -214,7 +215,7 @@ function receiveWebSocket(wsUrl, contentKey, onProgress, expectedBytes) {
           finish();
         } else {
           settled = true;
-          reject(new Error('Transfer incomplete'));
+          reject(new Error(UserMsg.TRANSFER_INCOMPLETE));
         }
       }
     };

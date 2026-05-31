@@ -2,13 +2,29 @@ import type { ShareKind, StoredShareStatus } from './protocol';
 import { verifyPin, pinRequired } from './pin';
 import { pruneAbuseTracking, recordFailedPin } from './abuse-tracking';
 import { generateShareId, isValidShareId } from './share-id';
+import {
+  accessDenied,
+  shareExpired,
+  shareUnavailable,
+  shareNotReady,
+  unauthorized,
+  jsonError,
+  ErrorMsg,
+} from './api-errors';
+import { hashIp, clientIp } from './ip-hash';
+import {
+  clearGlobalAccessFailures,
+  globalIpBlocked,
+  recordGlobalAccessFailure,
+  type AccessGuardEnv,
+} from './access-guard';
 
 const COOLDOWN_MS = 15 * 60 * 1000;
 const MAX_PIN_FAILURES = 3;
 const DOWNLOAD_TOKEN_TTL_MS = 10 * 60 * 1000;
 const MAX_EXPIRES_SECONDS = 30 * 24 * 60 * 60;
 
-export interface StoredShareEnv {
+export interface StoredShareEnv extends AccessGuardEnv {
   DB: D1Database;
   STORED: R2Bucket;
 }
@@ -149,9 +165,9 @@ export async function getStoredShareInfo(
   shareId: string,
 ): Promise<Response> {
   const row = await fetchRow(env, shareId);
-  if (!row) return jsonError('share unavailable', 404);
+  if (!row) return shareUnavailable();
   if (isExpired(row)) {
-    return shareExpiredResponse();
+    return shareExpired();
   }
 
   return Response.json({
@@ -172,31 +188,35 @@ export async function accessStoredShare(
   request: Request,
 ): Promise<Response> {
   const row = await fetchRow(env, shareId);
-  if (!row) return jsonError('access denied', 403);
-  if (isExpired(row)) return shareExpiredResponse();
+  if (!row) return accessDenied();
+  if (isExpired(row)) return shareExpired();
   if (row.state !== 'ready') {
-    return jsonError('share not ready', 409);
+    return shareNotReady();
+  }
+
+  if (await globalIpBlocked(env, request)) {
+    return accessDenied();
   }
 
   let body: { pin?: string };
   try {
     body = await request.json();
   } catch {
-    return jsonError('invalid body', 400);
+    return jsonError(ErrorMsg.INVALID_REQUEST, 400);
   }
 
-  const ip = request.headers.get('cf-connecting-ip') ?? '0.0.0.0';
-  const ipKey = await hashIp(ip);
+  const ipKey = await hashIp(clientIp(request));
   const abuse = parseAbuse(row);
 
   if (abuse.cooldown_until[ipKey] && abuse.cooldown_until[ipKey] > Date.now()) {
-    return jsonError('access denied', 429);
+    return accessDenied();
   }
 
   if (pinRequired(row.pin_hash)) {
     const pin = body.pin;
     if (typeof pin !== 'string') {
-      return jsonError('access denied', 403);
+      await recordGlobalAccessFailure(env, request);
+      return accessDenied();
     }
     const ok = await verifyPin(pin, row.pin_salt, row.pin_hash);
     if (!ok) {
@@ -209,9 +229,18 @@ export async function accessStoredShare(
       );
       pruneAbuseTracking(abuse, Date.now());
       await saveAbuse(env, shareId, abuse);
-      return jsonError('access denied', 403);
+      await recordGlobalAccessFailure(env, request);
+      return accessDenied();
     }
   }
+
+  if (abuse.failed_pins[ipKey] || abuse.cooldown_until[ipKey]) {
+    delete abuse.failed_pins[ipKey];
+    delete abuse.cooldown_until[ipKey];
+    pruneAbuseTracking(abuse, Date.now());
+  }
+
+  await clearGlobalAccessFailures(env, request);
 
   const downloadToken = crypto.randomUUID();
   const tokenExpires = Date.now() + DOWNLOAD_TOKEN_TTL_MS;
@@ -249,10 +278,11 @@ export async function uploadManifest(
 ): Promise<Response> {
   const row = await fetchRow(env, shareId);
   if (!row || row.state !== 'uploading') {
-    return jsonError('upload not allowed', 403);
+    return accessDenied();
   }
+  if (isExpired(row)) return shareExpired();
   if (!verifyUploadToken(request, row)) {
-    return jsonError('unauthorized', 401);
+    return unauthorized();
   }
 
   const body = await request.arrayBuffer();
@@ -275,10 +305,11 @@ export async function uploadChunk(
 ): Promise<Response> {
   const row = await fetchRow(env, shareId);
   if (!row || row.state !== 'uploading') {
-    return jsonError('upload not allowed', 403);
+    return accessDenied();
   }
+  if (isExpired(row)) return shareExpired();
   if (!verifyUploadToken(request, row)) {
-    return jsonError('unauthorized', 401);
+    return unauthorized();
   }
   if (!Number.isInteger(index) || index < 1 || index > row.chunk_count) {
     return jsonError('invalid chunk index', 400);
@@ -304,17 +335,18 @@ export async function completeStoredShare(
 ): Promise<Response> {
   const row = await fetchRow(env, shareId);
   if (!row || row.state !== 'uploading') {
-    return jsonError('complete not allowed', 403);
+    return accessDenied();
   }
+  if (isExpired(row)) return shareExpired();
 
   let body: { upload_token?: string };
   try {
     body = await request.json();
   } catch {
-    return jsonError('invalid body', 400);
+    return jsonError(ErrorMsg.INVALID_REQUEST, 400);
   }
   if (body.upload_token !== row.upload_token) {
-    return jsonError('unauthorized', 401);
+    return unauthorized();
   }
 
   await env.DB.prepare(
@@ -332,15 +364,15 @@ export async function downloadManifest(
   request: Request,
 ): Promise<Response> {
   const row = await fetchRow(env, shareId);
-  if (!row) return jsonError('not found', 404);
-  if (isExpired(row)) return shareExpiredResponse();
-  if (row.state !== 'ready') return jsonError('not ready', 409);
+  if (!row) return shareUnavailable();
+  if (isExpired(row)) return shareExpired();
+  if (row.state !== 'ready') return shareNotReady();
   if (!verifyDownloadToken(request, row)) {
-    return jsonError('unauthorized', 401);
+    return unauthorized();
   }
 
   const obj = await env.STORED.get(row.manifest_object_key);
-  if (!obj) return jsonError('not found', 404);
+  if (!obj) return shareUnavailable();
 
   return new Response(obj.body, {
     headers: {
@@ -357,19 +389,19 @@ export async function downloadChunk(
   request: Request,
 ): Promise<Response> {
   const row = await fetchRow(env, shareId);
-  if (!row) return jsonError('not found', 404);
-  if (isExpired(row)) return shareExpiredResponse();
-  if (row.state !== 'ready') return jsonError('not ready', 409);
+  if (!row) return shareUnavailable();
+  if (isExpired(row)) return shareExpired();
+  if (row.state !== 'ready') return shareNotReady();
   if (!verifyDownloadToken(request, row)) {
-    return jsonError('unauthorized', 401);
+    return unauthorized();
   }
   if (!Number.isInteger(index) || index < 1 || index > row.chunk_count) {
-    return jsonError('invalid chunk index', 400);
+    return jsonError(ErrorMsg.INVALID_REQUEST, 400);
   }
 
   const key = objectKey(row.storage_prefix, chunkName(index));
   const obj = await env.STORED.get(key);
-  if (!obj) return jsonError('not found', 404);
+  if (!obj) return shareUnavailable();
 
   return new Response(obj.body, {
     headers: { 'content-type': 'application/octet-stream' },
@@ -442,22 +474,6 @@ async function saveAbuse(
   )
     .bind(JSON.stringify(abuse.failed_pins), JSON.stringify(abuse.cooldown_until), shareId)
     .run();
-}
-
-async function hashIp(ip: string): Promise<string> {
-  const data = new TextEncoder().encode(`shr.v1.ip:${ip}`);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return [...new Uint8Array(digest)]
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-function shareExpiredResponse(): Response {
-  return jsonError('share expired', 410);
-}
-
-function jsonError(message: string, status: number): Response {
-  return Response.json({ error: message }, { status });
 }
 
 function isNonNegativeSafeInteger(value: unknown): value is number {

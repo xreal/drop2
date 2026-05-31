@@ -1,4 +1,5 @@
 import { detectShareContext, joinAndDownload, loadShareInfo } from './crypto.js';
+import { UserMsg } from './errors.js';
 
 const statusEl = document.querySelector('#status');
 const metaEl = document.querySelector('#meta');
@@ -31,15 +32,15 @@ async function main() {
 
     if (info.mode === 'stored') {
       if (!isStoredAvailable(info.status)) {
-        setStatus('This share is no longer available');
+        setStatus(UserMsg.SHARE_UNAVAILABLE);
         return;
       }
       if (!ctx.capability) {
-        setStatus('Missing capability secret — use the full link from the sender');
+        setStatus(UserMsg.MISSING_CAPABILITY);
         return;
       }
     } else if (!isLiveAvailable(info.status)) {
-      setStatus('This share is no longer available');
+      setStatus(UserMsg.SHARE_UNAVAILABLE);
       return;
     }
 
@@ -73,12 +74,12 @@ async function main() {
         URL.revokeObjectURL(url);
         setStatus('Download complete');
       } catch (err) {
-        setStatus(err.message || 'Download failed');
+        setStatus(err.message || UserMsg.DOWNLOAD_FAILED);
         actionEl.disabled = false;
       }
     });
   } catch (err) {
-    setStatus(err.message || 'Failed to load share');
+    setStatus(err.message || UserMsg.SHARE_UNAVAILABLE);
   }
 }
 
