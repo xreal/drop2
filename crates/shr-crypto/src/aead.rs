@@ -12,15 +12,25 @@ const NONCE_SIZE: usize = 24;
 /// Encrypt plaintext in fixed-size authenticated chunks.
 pub struct ChunkEncryptor {
     content_key: Zeroizing<[u8; 32]>,
+    chunk_plaintext_size: usize,
     next_index: u64,
 }
 
 impl ChunkEncryptor {
     pub fn new(content_key: Zeroizing<[u8; 32]>) -> Self {
+        Self::with_chunk_size(content_key, CHUNK_PLAINTEXT_SIZE)
+    }
+
+    pub fn with_chunk_size(content_key: Zeroizing<[u8; 32]>, chunk_plaintext_size: usize) -> Self {
         Self {
             content_key,
+            chunk_plaintext_size,
             next_index: 0,
         }
+    }
+
+    pub fn chunk_plaintext_size(&self) -> usize {
+        self.chunk_plaintext_size
     }
 
     pub fn encrypt_chunk(&mut self, plaintext: &[u8]) -> Result<Vec<u8>, CryptoError> {
@@ -58,6 +68,10 @@ impl ChunkDecryptor {
             content_key,
             next_index: 0,
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.next_index = 0;
     }
 
     pub fn decrypt_chunk(&mut self, frame: &[u8]) -> Result<Vec<u8>, CryptoError> {

@@ -5,9 +5,14 @@ mod kdf;
 mod key_exchange;
 mod pin;
 mod pin_hash;
+mod stored;
 mod stream;
 
 pub use aead::{ChunkDecryptor, ChunkEncryptor, CHUNK_PLAINTEXT_SIZE, FRAME_TAG_SIZE};
+pub use stored::{
+    decrypt_manifest, encrypt_manifest, CapabilitySecret, StoredKind, StoredManifestPlain,
+    StoredShareMaterial, STORED_CHUNK_PLAINTEXT_SIZE,
+};
 pub use error::CryptoError;
 pub use id::{generate_pin, generate_share_id, ShareId};
 pub use key_exchange::{EphemeralKeyPair, ReceiverEphemeral, SessionKeys};
