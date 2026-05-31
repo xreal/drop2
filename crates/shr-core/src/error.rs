@@ -1,0 +1,53 @@
+use thiserror::Error;
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum ExitCode {
+    Success = 0,
+    Runtime = 1,
+    Usage = 2,
+    Path = 3,
+    Network = 4,
+    Auth = 5,
+    Expired = 6,
+    Cancelled = 7,
+}
+
+impl ExitCode {
+    pub fn as_i32(self) -> i32 {
+        self as i32
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum CoreError {
+    #[error(transparent)]
+    Transfer(#[from] shr_transfer::TransferError),
+    #[error(transparent)]
+    Local(#[from] shr_local::LocalError),
+    #[error("invalid CLI usage: {0}")]
+    Usage(String),
+    #[error("network unavailable for requested mode")]
+    NetworkUnavailable,
+    #[error("operation cancelled")]
+    Cancelled,
+}
+
+impl CoreError {
+    pub fn exit_code(&self) -> ExitCode {
+        match self {
+            Self::Usage(_) => ExitCode::Usage,
+            Self::Transfer(e) => match e {
+                shr_transfer::TransferError::NotFound(_) | shr_transfer::TransferError::Unreadable(_) | shr_transfer::TransferError::BrokenSymlink(_) => ExitCode::Path,
+                _ => ExitCode::Runtime,
+            },
+            Self::Local(e) => match e {
+                shr_local::LocalError::PinRejected | shr_local::LocalError::PinRequired => ExitCode::Auth,
+                shr_local::LocalError::ServerStart => ExitCode::Network,
+                _ => ExitCode::Runtime,
+            },
+            Self::NetworkUnavailable => ExitCode::Network,
+            Self::Cancelled => ExitCode::Cancelled,
+        }
+    }
+}

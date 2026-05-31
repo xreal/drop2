@@ -1,0 +1,20 @@
+[package]
+name = "shr-cli"
+description = "shr.rip command-line interface"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "shr"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+open = "5.3"
+shr-core = { path = "../shr-core" }
+shr-crypto = { path = "../shr-crypto" }
+shr-local = { path = "../shr-local" }
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
