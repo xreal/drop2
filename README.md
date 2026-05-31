@@ -49,7 +49,7 @@ Download the artifact for your platform, make it executable, and put it on your 
 
 ### Build from source
 
-**Requirements:** Rust 1.85+, Node.js 22+ (for the embedded browser receiver)
+**Requirements:** Rust 1.88+, Node.js 22+ (for the embedded browser receiver)
 
 ```bash
 git clone https://github.com/xreal/drop2.git
