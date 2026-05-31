@@ -22,22 +22,27 @@ Create and wire these before first deploy:
 
 ### First-time setup
 
+One command handles D1/R2 wiring, migrations, asset build, and deploy:
+
 ```bash
-cd worker
-npm install
-
-# Create D1 (replace placeholder database_id in wrangler.jsonc)
-wrangler d1 create shr-db
-wrangler d1 migrations apply shr-db --remote
-
-# Create R2 bucket
-wrangler r2 bucket create shr-stored
-
-# Deploy
-npm run deploy
+./scripts/deploy.sh --check
 ```
 
-Update `worker/wrangler.jsonc` with real `database_id` values before deploying.
+With custom domain (zone must be on Cloudflare):
+
+```bash
+./scripts/deploy.sh --domain shr.rip --check
+```
+
+Manual steps if you prefer:
+
+```bash
+cd worker && npm install
+wrangler d1 create shr-db
+wrangler r2 bucket create shr-stored
+wrangler d1 migrations apply shr-db --remote
+npm run deploy
+```
 
 ### Secrets and vars
 

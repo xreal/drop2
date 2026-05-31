@@ -96,6 +96,7 @@ make test          # Rust + receiver + worker unit tests
 make check         # tests + worker typecheck
 make receiver      # rebuild browser assets only
 make bench         # pre-launch latency smoke checks
+./scripts/deploy.sh --check   # deploy Worker to Cloudflare
 ```
 
 Project layout:

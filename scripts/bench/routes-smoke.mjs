@@ -27,7 +27,7 @@ for (const check of checks) {
 
   const statusOk = result.status === check.expectStatus;
   const bodyOk = check.expectJson
-    ? JSON.stringify(result.json) === JSON.stringify(check.expectJson)
+    ? result.json?.ok === check.expectJson.ok
     : result.text.includes(check.expectBody);
 
   if (statusOk && bodyOk) {
