@@ -16,19 +16,38 @@ function formatBytes(n) {
   return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
+function isLiveAvailable(status) {
+  return status === 'waiting' || status === 'active';
+}
+
+function isStoredAvailable(status) {
+  return status === 'ready';
+}
+
 async function main() {
   try {
     const ctx = detectShareContext();
     const info = await loadShareInfo(ctx);
 
-    if (info.status && info.status !== 'waiting' && info.status !== 'active') {
+    if (info.mode === 'stored') {
+      if (!isStoredAvailable(info.status)) {
+        setStatus('This share is no longer available');
+        return;
+      }
+      if (!ctx.capability) {
+        setStatus('Missing capability secret — use the full link from the sender');
+        return;
+      }
+    } else if (!isLiveAvailable(info.status)) {
       setStatus('This share is no longer available');
       return;
     }
 
+    const modeLabel = info.mode === 'stored' ? 'Stored' : 'Live';
     metaEl.innerHTML = `
       <dt>Name</dt><dd>${escapeHtml(info.name)}</dd>
       <dt>Size</dt><dd>${formatBytes(info.size)}${info.kind === 'folder' ? ' (folder archive)' : ''}</dd>
+      <dt>Mode</dt><dd>${modeLabel}</dd>
       <dt>Share</dt><dd>${escapeHtml(info.share_id)}</dd>
     `;
     setStatus('Ready to download');

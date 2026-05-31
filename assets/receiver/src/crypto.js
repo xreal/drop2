@@ -6,6 +6,7 @@ import {
   createFrameState,
   finalizeEncryptedFrames,
 } from './frame-stream.js';
+import { downloadStoredShare, parseCapabilityFragment } from './stored-crypto.js';
 
 const enc = new TextEncoder();
 
@@ -29,16 +30,21 @@ function deriveContentKey(sharedSecret) {
 export function detectShareContext() {
   const hosted = window.location.pathname.match(/^\/s\/([A-Za-z0-9]{6})$/);
   if (hosted) {
-    return { mode: 'hosted', shareId: hosted[1] };
+    const capability = parseCapabilityFragment(window.location.hash.slice(1));
+    return { mode: 'hosted', shareId: hosted[1], capability };
   }
-  return { mode: 'local', shareId: null };
+  return { mode: 'local', shareId: null, capability: null };
 }
 
 export async function loadShareInfo(ctx) {
   if (ctx.mode === 'hosted') {
-    const res = await fetch(`/api/v1/live/${ctx.shareId}`);
-    if (!res.ok) throw new Error('Share unavailable');
-    return res.json();
+    const storedRes = await fetch(`/api/v1/stored/${ctx.shareId}`);
+    if (storedRes.ok) {
+      return storedRes.json();
+    }
+    const liveRes = await fetch(`/api/v1/live/${ctx.shareId}`);
+    if (!liveRes.ok) throw new Error('Share unavailable');
+    return liveRes.json();
   }
   const res = await fetch('/api/info');
   if (!res.ok) throw new Error('Could not load share info');
@@ -46,6 +52,19 @@ export async function loadShareInfo(ctx) {
 }
 
 export async function joinAndDownload({ ctx, info, onProgress, onStatus }) {
+  if (info.mode === 'stored') {
+    if (!ctx.capability) {
+      throw new Error('Missing capability secret in URL');
+    }
+    return downloadStoredShare({
+      shareId: ctx.shareId,
+      capabilityBytes: ctx.capability,
+      info,
+      onProgress,
+      onStatus,
+    });
+  }
+
   if (ctx.mode === 'hosted') {
     return joinHosted({ ctx, info, onProgress, onStatus });
   }
