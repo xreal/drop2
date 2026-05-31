@@ -12,7 +12,7 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use url::Url;
 
-use crate::api::ApiConfig;
+use crate::api::{cancel_live_share, ApiConfig};
 use crate::error::HostedError;
 
 pub struct HostedShareResult {
@@ -25,13 +25,18 @@ pub struct HostedShareResult {
 }
 
 pub struct HostedShareHandle {
+    config: ApiConfig,
+    share_id: ShareId,
+    sender_token: String,
     cancel_tx: mpsc::Sender<()>,
     join: tokio::task::JoinHandle<Result<(), HostedError>>,
 }
 
 impl HostedShareHandle {
-    pub fn cancel(&self) {
+    pub async fn cancel(&self) -> Result<(), HostedError> {
+        cancel_live_share(&self.config, &self.share_id.to_string(), &self.sender_token).await?;
         let _ = self.cancel_tx.try_send(());
+        Ok(())
     }
 
     pub async fn wait(self) -> Result<(), HostedError> {
@@ -41,10 +46,17 @@ impl HostedShareHandle {
     }
 
     pub async fn wait_until_shutdown(self) -> Result<(), HostedError> {
-        let Self { cancel_tx, join } = self;
+        let Self {
+            config,
+            share_id,
+            sender_token,
+            cancel_tx,
+            join,
+        } = self;
         tokio::select! {
             res = join => res.map_err(|_| HostedError::Session("task panicked".into()))?,
             _ = tokio::signal::ctrl_c() => {
+                let _ = cancel_live_share(&config, &share_id.to_string(), &sender_token).await;
                 let _ = cancel_tx.try_send(());
                 Err(HostedError::Cancelled)
             }
@@ -152,15 +164,16 @@ impl HostedSender {
             .await
             .map_err(|_| HostedError::Session("sender connect failed".into()))?;
 
-        let _ = sender_token;
-
         Ok(HostedShareResult {
-            share_id,
+            share_id: share_id.clone(),
             display_name,
             share_url,
             pin,
             wait_seconds,
             handle: HostedShareHandle {
+                config: config.clone(),
+                share_id,
+                sender_token,
                 cancel_tx,
                 join,
             },

@@ -90,3 +90,28 @@ pub async fn create_live_share(
         .await
         .map_err(|_| HostedError::InvalidResponse)
 }
+
+pub async fn cancel_live_share(
+    config: &ApiConfig,
+    share_id: &str,
+    sender_token: &str,
+) -> Result<(), HostedError> {
+    let res = config
+        .client
+        .delete(config.url(&format!("/api/v1/live/{share_id}")))
+        .header("x-shr-sender-token", sender_token)
+        .send()
+        .await
+        .map_err(|e| HostedError::Network(e.to_string()))?;
+
+    let status = res.status();
+    if !status.is_success() {
+        let message = res.text().await.unwrap_or_else(|_| status.to_string());
+        return Err(HostedError::Api {
+            status: status.as_u16(),
+            message,
+        });
+    }
+
+    Ok(())
+}
