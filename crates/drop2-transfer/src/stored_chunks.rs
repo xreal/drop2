@@ -1,8 +1,8 @@
 use std::pin::Pin;
 
 use bytes::Bytes;
-use futures::{Stream, StreamExt};
 use drop2_crypto::{ChunkEncryptor, STORED_CHUNK_PLAINTEXT_SIZE};
+use futures::{Stream, StreamExt};
 use zeroize::Zeroizing;
 
 use crate::{ByteSource, TransferError};
@@ -27,8 +27,7 @@ async fn collect_encrypted_chunks(
     dek: Zeroizing<[u8; 32]>,
     mut stream: Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>,
 ) -> Result<Vec<Vec<u8>>, TransferError> {
-    let mut encryptor =
-        ChunkEncryptor::with_chunk_size(dek, STORED_CHUNK_PLAINTEXT_SIZE);
+    let mut encryptor = ChunkEncryptor::with_chunk_size(dek, STORED_CHUNK_PLAINTEXT_SIZE);
     let chunk_size = encryptor.chunk_plaintext_size();
     let mut buffer = Vec::new();
     let mut chunks = Vec::new();

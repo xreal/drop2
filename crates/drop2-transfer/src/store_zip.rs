@@ -36,7 +36,8 @@ impl<W: Write> StoreZipWriter<W> {
         self.add_entry(name, &[], true)
     }
 
-    pub fn add_file(&mut self, name: &str, data: &[u8]) -> Result<(), TransferError> {
+    #[cfg(test)]
+    fn add_file(&mut self, name: &str, data: &[u8]) -> Result<(), TransferError> {
         self.add_entry(name, data, false)
     }
 
@@ -110,7 +111,12 @@ impl<W: Write> StoreZipWriter<W> {
             )?;
         }
 
-        write_end_record(&mut self.inner, self.entries.len() as u16, cd_size, cd_start)?;
+        write_end_record(
+            &mut self.inner,
+            self.entries.len() as u16,
+            cd_size,
+            cd_start,
+        )?;
         Ok(self.inner)
     }
 }
@@ -201,8 +207,8 @@ fn write_end_record(
 }
 
 fn crc_and_size(path: &Path) -> Result<(u32, u32), TransferError> {
-    let mut file = std::fs::File::open(path)
-        .map_err(|e| TransferError::Unreadable(e.to_string()))?;
+    let mut file =
+        std::fs::File::open(path).map_err(|e| TransferError::Unreadable(e.to_string()))?;
     let mut hasher = crc32fast::Hasher::new();
     let mut size = 0u64;
     let mut buf = [0u8; 64 * 1024];
@@ -217,9 +223,13 @@ fn crc_and_size(path: &Path) -> Result<(u32, u32), TransferError> {
         hasher.update(&buf[..n]);
         size = size
             .checked_add(n as u64)
-            .ok_or(TransferError::ArchiveLimit("file exceeds 4 GiB Zip32 limit"))?;
+            .ok_or(TransferError::ArchiveLimit(
+                "file exceeds 4 GiB Zip32 limit",
+            ))?;
         if size > ZIP_U32_MAX {
-            return Err(TransferError::ArchiveLimit("file exceeds 4 GiB Zip32 limit"));
+            return Err(TransferError::ArchiveLimit(
+                "file exceeds 4 GiB Zip32 limit",
+            ));
         }
     }
 
@@ -227,10 +237,9 @@ fn crc_and_size(path: &Path) -> Result<(u32, u32), TransferError> {
 }
 
 fn copy_file_contents(path: &Path, writer: &mut impl Write) -> Result<(), TransferError> {
-    let mut file = std::fs::File::open(path)
-        .map_err(|e| TransferError::Unreadable(e.to_string()))?;
-    std::io::copy(&mut file, writer)
-        .map_err(|e| TransferError::Unreadable(e.to_string()))?;
+    let mut file =
+        std::fs::File::open(path).map_err(|e| TransferError::Unreadable(e.to_string()))?;
+    std::io::copy(&mut file, writer).map_err(|e| TransferError::Unreadable(e.to_string()))?;
     Ok(())
 }
 
@@ -252,11 +261,7 @@ fn ensure_entry_count_fits(entries: usize) -> Result<(), TransferError> {
     Ok(())
 }
 
-fn checked_add_offset(
-    current: u32,
-    add: u64,
-    message: &'static str,
-) -> Result<u32, TransferError> {
+fn checked_add_offset(current: u32, add: u64, message: &'static str) -> Result<u32, TransferError> {
     let next = u64::from(current)
         .checked_add(add)
         .ok_or(TransferError::ArchiveLimit(message))?;
@@ -332,12 +337,8 @@ mod tests {
 
     #[test]
     fn checked_add_offset_rejects_archive_growth_over_limit() {
-        let err = checked_add_offset(
-            u32::MAX,
-            1,
-            "archive exceeds 4 GiB Zip32 offset limit",
-        )
-        .unwrap_err();
+        let err = checked_add_offset(u32::MAX, 1, "archive exceeds 4 GiB Zip32 offset limit")
+            .unwrap_err();
 
         assert!(matches!(
             err,
@@ -347,12 +348,8 @@ mod tests {
 
     #[test]
     fn checked_add_offset_rejects_central_directory_growth_over_limit() {
-        let err = checked_add_offset(
-            u32::MAX,
-            47,
-            "central directory exceeds 4 GiB Zip32 limit",
-        )
-        .unwrap_err();
+        let err = checked_add_offset(u32::MAX, 47, "central directory exceeds 4 GiB Zip32 limit")
+            .unwrap_err();
 
         assert!(matches!(
             err,

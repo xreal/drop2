@@ -23,7 +23,11 @@ pub fn parse_duration(input: &str) -> Result<Duration, CoreError> {
         'm' => value.saturating_mul(60),
         'h' => value.saturating_mul(3600),
         'd' => value.saturating_mul(86_400),
-        _ => return Err(CoreError::Usage(format!("unsupported duration unit: {input}"))),
+        _ => {
+            return Err(CoreError::Usage(format!(
+                "unsupported duration unit: {input}"
+            )))
+        }
     };
 
     Ok(Duration::from_secs(secs))
@@ -36,6 +40,9 @@ mod tests {
     #[test]
     fn parses_hours_and_days() {
         assert_eq!(parse_duration("1h").unwrap(), Duration::from_secs(3600));
-        assert_eq!(parse_duration("5d").unwrap(), Duration::from_secs(5 * 86_400));
+        assert_eq!(
+            parse_duration("5d").unwrap(),
+            Duration::from_secs(5 * 86_400)
+        );
     }
 }

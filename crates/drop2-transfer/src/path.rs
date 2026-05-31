@@ -19,14 +19,12 @@ pub enum InputKind {
 }
 
 pub fn inspect_path(path: &Path) -> Result<ShareInput, TransferError> {
-    let meta = std::fs::symlink_metadata(path).map_err(|_| {
-        TransferError::NotFound(path.display().to_string())
-    })?;
+    let meta = std::fs::symlink_metadata(path)
+        .map_err(|_| TransferError::NotFound(path.display().to_string()))?;
 
     if meta.file_type().is_symlink() {
-        let target = std::fs::read_link(path).map_err(|_| {
-            TransferError::Unreadable(path.display().to_string())
-        })?;
+        let target = std::fs::read_link(path)
+            .map_err(|_| TransferError::Unreadable(path.display().to_string()))?;
         let resolved_target = if target.is_absolute() {
             target
         } else {
@@ -35,9 +33,11 @@ pub fn inspect_path(path: &Path) -> Result<ShareInput, TransferError> {
         if !resolved_target.exists() {
             return Err(TransferError::BrokenSymlink(path.display().to_string()));
         }
-        return inspect_path(&path.canonicalize().map_err(|_| {
-            TransferError::BrokenSymlink(path.display().to_string())
-        })?);
+        return inspect_path(
+            &path
+                .canonicalize()
+                .map_err(|_| TransferError::BrokenSymlink(path.display().to_string()))?,
+        );
     }
 
     if meta.is_file() {

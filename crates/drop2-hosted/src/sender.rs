@@ -3,11 +3,13 @@ use std::sync::Arc;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use bytes::Bytes;
-use futures::{Stream, StreamExt};
-use futures_util::SinkExt;
 use drop2_crypto::{EphemeralKeyPair, Pin as Drop2Pin, ShareId};
 use drop2_protocol::{CreateLiveShareResponse, WsControl};
-use drop2_transfer::{ByteSource, EncryptedFrameStream, FileSource, FolderZipSource, InputKind, ShareInput};
+use drop2_transfer::{
+    ByteSource, EncryptedFrameStream, FileSource, FolderZipSource, InputKind, ShareInput,
+};
+use futures::{Stream, StreamExt};
+use futures_util::SinkExt;
 use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use url::Url;
@@ -30,6 +32,13 @@ pub struct HostedShareHandle {
     sender_token: String,
     cancel_tx: mpsc::Sender<()>,
     join: tokio::task::JoinHandle<Result<(), HostedError>>,
+    events_rx: mpsc::UnboundedReceiver<HostedTransferEvent>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostedTransferEvent {
+    DownloadStarted,
+    DownloadCompleted,
 }
 
 impl HostedShareHandle {
@@ -46,19 +55,40 @@ impl HostedShareHandle {
     }
 
     pub async fn wait_until_shutdown(self) -> Result<(), HostedError> {
+        self.wait_until_shutdown_with_events(|_| {}).await
+    }
+
+    pub async fn wait_until_shutdown_with_events<F>(
+        self,
+        mut on_event: F,
+    ) -> Result<(), HostedError>
+    where
+        F: FnMut(HostedTransferEvent),
+    {
         let Self {
             config,
             share_id,
             sender_token,
             cancel_tx,
-            join,
+            mut join,
+            mut events_rx,
         } = self;
-        tokio::select! {
-            res = join => res.map_err(|_| HostedError::Session("task panicked".into()))?,
-            _ = tokio::signal::ctrl_c() => {
-                let _ = cancel_live_share(&config, &share_id.to_string(), &sender_token).await;
-                let _ = cancel_tx.try_send(());
-                Err(HostedError::Cancelled)
+
+        loop {
+            tokio::select! {
+                res = &mut join => {
+                    return res.map_err(|_| HostedError::Session("task panicked".into()))?;
+                }
+                event = events_rx.recv() => {
+                    if let Some(event) = event {
+                        on_event(event);
+                    }
+                }
+                _ = tokio::signal::ctrl_c() => {
+                    let _ = cancel_live_share(&config, &share_id.to_string(), &sender_token).await;
+                    let _ = cancel_tx.try_send(());
+                    return Err(HostedError::Cancelled);
+                }
             }
         }
     }
@@ -73,8 +103,8 @@ impl HostedSender {
         create: CreateLiveShareResponse,
         pin: Option<Drop2Pin>,
     ) -> Result<HostedShareResult, HostedError> {
-        let share_id = ShareId::parse(&create.share_id)
-            .map_err(|_| HostedError::InvalidResponse)?;
+        let share_id =
+            ShareId::parse(&create.share_id).map_err(|_| HostedError::InvalidResponse)?;
 
         let keypair = EphemeralKeyPair::generate();
         let keypair = Arc::new(Mutex::new(keypair));
@@ -82,6 +112,7 @@ impl HostedSender {
         let source = build_source(&input)?;
         let (cancel_tx, mut cancel_rx) = mpsc::channel::<()>(1);
         let (ready_tx, ready_rx) = oneshot::channel();
+        let (events_tx, events_rx) = mpsc::unbounded_channel::<HostedTransferEvent>();
 
         let ws_url = to_ws_url(&config.url(&create.connect_url))?;
         let sender_token = create.sender_token.clone();
@@ -129,6 +160,7 @@ impl HostedSender {
                                     }
                                     WsControl::ReceiverConnected => {
                                         receiver_ready = true;
+                                        let _ = events_tx.send(HostedTransferEvent::DownloadStarted);
                                     }
                                     WsControl::Error { message, .. } => {
                                         return Err(HostedError::Session(message));
@@ -143,6 +175,7 @@ impl HostedSender {
                                             .map_err(|e| HostedError::Session(e.to_string()))?;
                                         write.send(Message::Text(done.into())).await
                                             .map_err(|e| HostedError::Network(e.to_string()))?;
+                                        let _ = events_tx.send(HostedTransferEvent::DownloadCompleted);
                                         return Ok(());
                                     }
                                 }
@@ -176,6 +209,7 @@ impl HostedSender {
                 sender_token,
                 cancel_tx,
                 join,
+                events_rx,
             },
         })
     }
@@ -234,8 +268,7 @@ fn decode_key(encoded: &str) -> Result<[u8; 32], HostedError> {
 }
 
 fn to_ws_url(http_url: &str) -> Result<String, HostedError> {
-    let mut url =
-        Url::parse(http_url).map_err(|e| HostedError::Network(e.to_string()))?;
+    let mut url = Url::parse(http_url).map_err(|e| HostedError::Network(e.to_string()))?;
     let scheme = match url.scheme() {
         "https" => "wss",
         "http" => "ws",

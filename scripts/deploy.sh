@@ -61,7 +61,7 @@ ensure_d1() {
     if (row) process.stdout.write(row.uuid);
   " "$D1_NAME")"
   if [[ -z "$id" ]]; then
-    echo "==> Creating D1 database: $D1_NAME"
+    echo "==> Creating D1 database: $D1_NAME" >&2
     local out
     out="$(wrangler d1 create "$D1_NAME")"
     id="$(echo "$out" | grep -Eo '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)"

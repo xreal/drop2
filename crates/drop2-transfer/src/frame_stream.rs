@@ -2,9 +2,9 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use bytes::Bytes;
+use drop2_crypto::ChunkEncryptor;
 use futures::Stream;
 use pin_project_lite::pin_project;
-use drop2_crypto::ChunkEncryptor;
 use zeroize::Zeroizing;
 
 pin_project! {
@@ -69,7 +69,9 @@ where
                     let tail: Vec<u8> = this.buffer.drain(..).collect();
                     match this.encryptor.encrypt_chunk(&tail) {
                         Ok(frame) => return Poll::Ready(Some(Ok(Bytes::from(frame)))),
-                        Err(e) => return Poll::Ready(Some(Err(std::io::Error::other(e.to_string())))),
+                        Err(e) => {
+                            return Poll::Ready(Some(Err(std::io::Error::other(e.to_string()))))
+                        }
                     }
                 }
                 Poll::Pending => {

@@ -102,8 +102,7 @@ mod tests {
     fn b64_roundtrip() {
         let pin = Pin::parse("0001").unwrap();
         let stored = PinHash::hash_pin(&pin);
-        let decoded =
-            PinHash::decode(&stored.salt_b64(), &stored.hash_b64()).expect("decode");
+        let decoded = PinHash::decode(&stored.salt_b64(), &stored.hash_b64()).expect("decode");
         assert!(decoded.verify(&pin));
     }
 }

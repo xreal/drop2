@@ -4,7 +4,7 @@ use std::time::Duration;
 use drop2_crypto::{generate_pin, Pin, PinHash, ShareId};
 use drop2_hosted::{
     api_base_from_env, check_reachable, create_live_share, HostedError, HostedSender,
-    HostedShareHandle,
+    HostedShareHandle, HostedTransferEvent,
 };
 use drop2_transfer::inspect_path;
 
@@ -25,6 +25,8 @@ pub struct HostedShareOutcome {
     pub wait: Duration,
     pub handle: HostedShareHandle,
 }
+
+pub type HostedDownloadEvent = HostedTransferEvent;
 
 pub async fn run_hosted_share(opts: HostedShareOptions) -> Result<HostedShareOutcome, CoreError> {
     let input = inspect_path(Path::new(&opts.path))?;

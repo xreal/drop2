@@ -1,4 +1,5 @@
-use std::net::{Ipv4Addr, SocketAddr};
+use std::collections::BTreeSet;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
 use axum::extract::{Path as AxumPath, State};
@@ -6,13 +7,21 @@ use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use axum_server::tls_rustls::RustlsConfig;
 use drop2_crypto::{EphemeralKeyPair, Pin, ShareId};
 use drop2_protocol::{JoinRequest, JoinResponse, LocalShareInfo, ShareKind};
-use drop2_transfer::{ByteSource, FileSource, FolderZipSource, InputKind, ShareInput};
+use drop2_transfer::{InputKind, ShareInput};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 use crate::assets::{index_html, ReceiverAssets};
 use crate::error::LocalError;
 use crate::session::SessionState;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LocalTransferEvent {
+    DownloadStarted,
+    DownloadCompleted,
+}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -23,18 +32,25 @@ pub struct LocalUrls {
     pub share_id: ShareId,
     pub bind_addr: SocketAddr,
     pub lan_addr: SocketAddr,
+    pub local_url: String,
+    pub loopback_url: String,
 }
 
 pub struct LocalServerHandle {
     pub urls: LocalUrls,
-    shutdown: Option<tokio::sync::oneshot::Sender<()>>,
+    shutdown: Option<axum_server::Handle>,
+    transfer_events: UnboundedReceiver<LocalTransferEvent>,
 }
 
 impl LocalServerHandle {
     pub fn stop(&mut self) {
-        if let Some(tx) = self.shutdown.take() {
-            let _ = tx.send(());
+        if let Some(handle) = self.shutdown.take() {
+            handle.shutdown();
         }
+    }
+
+    pub async fn next_transfer_event(&mut self) -> Option<LocalTransferEvent> {
+        self.transfer_events.recv().await
     }
 }
 
@@ -53,48 +69,40 @@ impl LocalServer {
             InputKind::Folder => ShareKind::Folder,
         };
 
-        let source: Box<dyn ByteSource> = match input.kind {
-            InputKind::File => Box::new(FileSource::new(
-                input.path.clone(),
-                display_name.clone(),
-                input.size,
-            )),
-            InputKind::Folder => Box::new(FolderZipSource::new(
-                input.path.clone(),
-                display_name.clone(),
-                input.size,
-            )),
-        };
-
         let keypair = EphemeralKeyPair::generate();
+        let (events_tx, events_rx) = unbounded_channel();
         let session = Arc::new(SessionState::new(
             share_id.clone(),
             display_name,
             kind,
-            source.estimated_size(),
+            input.size,
             pin,
             keypair,
-            source,
+            input.path,
+            input.kind,
+            input.size,
+            events_tx,
         ));
 
-        let listener = tokio::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0))
-            .await
+        let listener = std::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0))
             .map_err(|_| LocalError::ServerStart)?;
         let actual = listener.local_addr().map_err(|_| LocalError::ServerStart)?;
 
-        let lan_ip = local_ip_address::local_ip().unwrap_or(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST));
+        let lan_ip =
+            local_ip_address::local_ip().unwrap_or(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST));
         let lan_addr = SocketAddr::new(lan_ip, actual.port());
+        let tls_config = build_tls_config(lan_ip).await?;
 
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let app = build_router(AppState {
             inner: session.clone(),
         });
+        let server_handle = axum_server::Handle::new();
+        let shutdown_handle = server_handle.clone();
 
         tokio::spawn(async move {
-            let _ = axum::serve(listener, app)
-                .with_graceful_shutdown(async {
-                    let _ = shutdown_rx.await;
-                })
+            let _ = axum_server::from_tcp_rustls(listener, tls_config)
+                .handle(server_handle)
+                .serve(app.into_make_service())
                 .await;
         });
 
@@ -103,10 +111,32 @@ impl LocalServer {
                 share_id,
                 bind_addr: actual,
                 lan_addr,
+                local_url: format!("https://{lan_addr}"),
+                loopback_url: format!("https://127.0.0.1:{}", actual.port()),
             },
-            shutdown: Some(shutdown_tx),
+            shutdown: Some(shutdown_handle),
+            transfer_events: events_rx,
         })
     }
+}
+
+async fn build_tls_config(lan_ip: IpAddr) -> Result<RustlsConfig, LocalError> {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    let mut sans = BTreeSet::new();
+    sans.insert("localhost".to_string());
+    sans.insert("127.0.0.1".to_string());
+    sans.insert(lan_ip.to_string());
+
+    let key_pair = rcgen::generate_simple_self_signed(sans.into_iter().collect::<Vec<_>>())
+        .map_err(|_| LocalError::ServerStart)?;
+
+    RustlsConfig::from_pem(
+        key_pair.cert.pem().into_bytes(),
+        key_pair.key_pair.serialize_pem().into_bytes(),
+    )
+    .await
+    .map_err(|_| LocalError::ServerStart)
 }
 
 fn build_router(state: AppState) -> Router {
@@ -120,7 +150,10 @@ fn build_router(state: AppState) -> Router {
 }
 
 async fn serve_index() -> impl IntoResponse {
-    ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], index_html())
+    (
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        index_html(),
+    )
 }
 
 async fn serve_asset(AxumPath(path): AxumPath<String>) -> impl IntoResponse {

@@ -68,19 +68,10 @@ pub struct LiveAccessResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum WsControl {
-    JoinRequest {
-        client_public_key: String,
-    },
-    JoinResponse {
-        server_public_key: String,
-    },
+    JoinRequest { client_public_key: String },
+    JoinResponse { server_public_key: String },
     ReceiverConnected,
     TransferComplete,
-    Error {
-        code: String,
-        message: String,
-    },
-    State {
-        status: LiveShareStatus,
-    },
+    Error { code: String, message: String },
+    State { status: LiveShareStatus },
 }

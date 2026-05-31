@@ -10,7 +10,10 @@ fn main() {
     }
 
     let dist_dir = dist.parent().expect("dist path has parent");
-    println!("cargo:rerun-if-changed={}", dist_dir.join("index.html").display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        dist_dir.join("index.html").display()
+    );
     println!(
         "cargo:rerun-if-changed={}",
         dist_dir.join("app.bundle.js").display()

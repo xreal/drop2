@@ -1,16 +1,21 @@
+use std::path::PathBuf;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use bytes::Bytes;
-use futures::{Stream, StreamExt};
 use drop2_crypto::{EphemeralKeyPair, Pin as Drop2Pin, ShareId};
 use drop2_protocol::{JoinRequest, JoinResponse, LocalShareInfo, ShareKind, ShareMode};
-use drop2_transfer::{ByteSource, EncryptedFrameStream};
-use tokio::sync::Mutex;
+use drop2_transfer::{ByteSource, EncryptedFrameStream, FileSource, FolderZipSource, InputKind};
+use futures::{Stream, StreamExt};
+use pin_project_lite::pin_project;
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::error::LocalError;
+use crate::server::LocalTransferEvent;
 
 pub struct SessionState {
     share_id: ShareId,
@@ -19,14 +24,68 @@ pub struct SessionState {
     size: u64,
     pin: Option<Drop2Pin>,
     keypair: EphemeralKeyPair,
-    source: Mutex<Option<Box<dyn ByteSource>>>,
+    source_path: PathBuf,
+    source_kind: InputKind,
+    source_size: u64,
     join: Mutex<Option<ActiveJoin>>,
-    consumed: Mutex<bool>,
+    active_slot: Arc<Semaphore>,
+    events_tx: UnboundedSender<LocalTransferEvent>,
 }
 
 struct ActiveJoin {
     token: String,
     content_key: Zeroizing<[u8; 32]>,
+}
+
+type ByteStream = Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>;
+
+pin_project! {
+    struct ActiveStream<S> {
+        #[pin]
+        inner: S,
+        _permit: OwnedSemaphorePermit,
+        events_tx: UnboundedSender<LocalTransferEvent>,
+        completed_sent: bool,
+    }
+}
+
+impl<S> ActiveStream<S> {
+    fn new(
+        inner: S,
+        permit: OwnedSemaphorePermit,
+        events_tx: UnboundedSender<LocalTransferEvent>,
+    ) -> Self {
+        Self {
+            inner,
+            _permit: permit,
+            events_tx,
+            completed_sent: false,
+        }
+    }
+}
+
+impl<S> Stream for ActiveStream<S>
+where
+    S: Stream,
+{
+    type Item = S::Item;
+
+    fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        let mut this = self.project();
+        match this.inner.as_mut().poll_next(cx) {
+            std::task::Poll::Ready(None) => {
+                if !*this.completed_sent {
+                    let _ = this.events_tx.send(LocalTransferEvent::DownloadCompleted);
+                    *this.completed_sent = true;
+                }
+                std::task::Poll::Ready(None)
+            }
+            other => other,
+        }
+    }
 }
 
 impl SessionState {
@@ -37,7 +96,10 @@ impl SessionState {
         size: u64,
         pin: Option<Drop2Pin>,
         keypair: EphemeralKeyPair,
-        source: Box<dyn ByteSource>,
+        source_path: PathBuf,
+        source_kind: InputKind,
+        source_size: u64,
+        events_tx: UnboundedSender<LocalTransferEvent>,
     ) -> Self {
         Self {
             share_id,
@@ -46,13 +108,27 @@ impl SessionState {
             size,
             pin,
             keypair,
-            source: Mutex::new(Some(source)),
+            source_path,
+            source_kind,
+            source_size,
             join: Mutex::new(None),
-            consumed: Mutex::new(false),
+            active_slot: Arc::new(Semaphore::new(1)),
+            events_tx,
         }
     }
 
     pub fn info(&self) -> LocalShareInfo {
+        let has_pending_join = self
+            .join
+            .try_lock()
+            .map(|guard| guard.is_some())
+            .unwrap_or(true);
+
+        let status = if self.active_slot.available_permits() == 0 || has_pending_join {
+            "active"
+        } else {
+            "waiting"
+        };
         LocalShareInfo {
             share_id: self.share_id.to_string(),
             mode: ShareMode::Live,
@@ -60,19 +136,17 @@ impl SessionState {
             name: self.display_name.clone(),
             size: self.size,
             pin_required: self.pin.is_some(),
+            status: status.to_string(),
         }
     }
 
     pub async fn join(&self, request: JoinRequest) -> Result<JoinResponse, LocalError> {
-        if *self.consumed.lock().await {
+        if self.active_slot.available_permits() == 0 {
             return Err(LocalError::Busy);
         }
 
         if let Some(expected) = &self.pin {
-            let provided = request
-                .pin
-                .as_deref()
-                .ok_or(LocalError::PinRequired)?;
+            let provided = request.pin.as_deref().ok_or(LocalError::PinRequired)?;
             let pin = Drop2Pin::parse(provided).map_err(|_| LocalError::PinRejected)?;
             if pin != *expected {
                 return Err(LocalError::PinRejected);
@@ -97,36 +171,25 @@ impl SessionState {
         })
     }
 
-    pub async fn open_stream(
-        &self,
-        token: &str,
-    ) -> Result<
-        EncryptedFrameStream<
-            Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>,
-        >,
-        LocalError,
-    > {
-        if *self.consumed.lock().await {
-            return Err(LocalError::Busy);
-        }
+    pub async fn open_stream(&self, token: &str) -> Result<ByteStream, LocalError> {
+        let permit = self
+            .active_slot
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| LocalError::Busy)?;
 
         let content_key = {
-            let guard = self.join.lock().await;
-            let active = guard.as_ref().ok_or(LocalError::InvalidJoin)?;
+            let mut guard = self.join.lock().await;
+            let active = guard.take().ok_or(LocalError::InvalidJoin)?;
             if active.token != token {
+                *guard = Some(active);
                 return Err(LocalError::InvalidToken);
             }
-            active.content_key.clone()
+            active.content_key
         };
 
-        *self.consumed.lock().await = true;
-
-        let source = self
-            .source
-            .lock()
-            .await
-            .take()
-            .ok_or(LocalError::SessionUnavailable)?;
+        let source = self.build_source();
+        let _ = self.events_tx.send(LocalTransferEvent::DownloadStarted);
 
         let byte_stream = source.into_byte_stream().map(|chunk| {
             chunk
@@ -136,7 +199,27 @@ impl SessionState {
         let byte_stream: Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>> =
             Box::pin(byte_stream);
 
-        Ok(EncryptedFrameStream::new(content_key, byte_stream))
+        let encrypted = EncryptedFrameStream::new(content_key, byte_stream);
+        Ok(Box::pin(ActiveStream::new(
+            encrypted,
+            permit,
+            self.events_tx.clone(),
+        )))
+    }
+
+    fn build_source(&self) -> Box<dyn ByteSource> {
+        match self.source_kind {
+            InputKind::File => Box::new(FileSource::new(
+                self.source_path.clone(),
+                self.display_name.clone(),
+                self.source_size,
+            )),
+            InputKind::Folder => Box::new(FolderZipSource::new(
+                self.source_path.clone(),
+                self.display_name.clone(),
+                self.source_size,
+            )),
+        }
     }
 }
 

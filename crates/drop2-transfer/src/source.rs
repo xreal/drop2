@@ -17,7 +17,9 @@ pub trait ByteSource: Send {
     fn name(&self) -> &str;
     fn kind(&self) -> InputKind;
     fn estimated_size(&self) -> u64;
-    fn into_byte_stream(self: Box<Self>) -> Pin<Box<dyn Stream<Item = Result<Vec<u8>, TransferError>> + Send>>;
+    fn into_byte_stream(
+        self: Box<Self>,
+    ) -> Pin<Box<dyn Stream<Item = Result<Vec<u8>, TransferError>> + Send>>;
 }
 
 pub struct FileSource {
@@ -46,7 +48,9 @@ impl ByteSource for FileSource {
         self.size
     }
 
-    fn into_byte_stream(self: Box<Self>) -> Pin<Box<dyn Stream<Item = Result<Vec<u8>, TransferError>> + Send>> {
+    fn into_byte_stream(
+        self: Box<Self>,
+    ) -> Pin<Box<dyn Stream<Item = Result<Vec<u8>, TransferError>> + Send>> {
         Box::pin(async_stream::stream! {
             let file = File::open(&self.path).await.map_err(|e| TransferError::Unreadable(e.to_string()))?;
             let reader = BufReader::with_capacity(64 * 1024, file);
@@ -141,7 +145,9 @@ impl ByteSource for FolderZipSource {
         self.estimated
     }
 
-    fn into_byte_stream(self: Box<Self>) -> Pin<Box<dyn Stream<Item = Result<Vec<u8>, TransferError>> + Send>> {
+    fn into_byte_stream(
+        self: Box<Self>,
+    ) -> Pin<Box<dyn Stream<Item = Result<Vec<u8>, TransferError>> + Send>> {
         let path = self.path.clone();
         Box::pin(async_stream::stream! {
             let (tx, rx) = tokio::sync::mpsc::channel::<Result<Vec<u8>, TransferError>>(4);

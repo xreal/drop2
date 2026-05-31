@@ -1,10 +1,14 @@
-use drop2_crypto::{generate_pin, Pin, PinHash, ShareId, StoredKind, StoredManifestPlain, StoredShareMaterial};
 use drop2_crypto::{decrypt_manifest, encrypt_manifest, CapabilitySecret, ChunkDecryptor};
+use drop2_crypto::{
+    generate_pin, Pin, PinHash, ShareId, StoredKind, StoredManifestPlain, StoredShareMaterial,
+};
 use drop2_protocol::{
     CreateStoredShareRequest, CreateStoredShareResponse, ShareKind, StoredAccessRequest,
     StoredAccessResponse,
 };
-use drop2_transfer::{encrypt_source_to_chunks, ByteSource, FileSource, FolderZipSource, InputKind, ShareInput};
+use drop2_transfer::{
+    encrypt_source_to_chunks, ByteSource, FileSource, FolderZipSource, InputKind, ShareInput,
+};
 
 use crate::api::ApiConfig;
 use crate::error::HostedError;
@@ -49,8 +53,8 @@ pub async fn upload_stored_share(
         chunk_count,
         &material.dek,
     );
-    let manifest_ciphertext =
-        encrypt_manifest(&manifest_plain, &material.capability).map_err(|e| HostedError::Session(e.to_string()))?;
+    let manifest_ciphertext = encrypt_manifest(&manifest_plain, &material.capability)
+        .map_err(|e| HostedError::Session(e.to_string()))?;
     let manifest_ciphertext_bytes = manifest_ciphertext.len() as u64;
     let ciphertext_bytes_total = ciphertext_bytes_total + manifest_ciphertext_bytes;
 
@@ -130,19 +134,16 @@ pub async fn download_stored_share(
         .await
         .map_err(|_| HostedError::InvalidResponse)?;
 
-    let manifest_bytes = fetch_protected(
-        config,
-        share_id,
-        "/manifest",
-        &access.download_token,
-    )
-    .await?;
+    let manifest_bytes =
+        fetch_protected(config, share_id, "/manifest", &access.download_token).await?;
 
     let (manifest, dek) = decrypt_manifest(&manifest_bytes, capability)
         .map_err(|e| HostedError::Session(e.to_string()))?;
 
     if manifest.plaintext_size > MAX_STORED_PLAINTEXT_BYTES {
-        return Err(HostedError::Session("stored share exceeds maximum supported size".into()));
+        return Err(HostedError::Session(
+            "stored share exceeds maximum supported size".into(),
+        ));
     }
 
     let mut decryptor = ChunkDecryptor::new(dek);

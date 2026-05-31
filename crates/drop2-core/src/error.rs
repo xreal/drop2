@@ -44,11 +44,15 @@ impl CoreError {
         match self {
             Self::Usage(_) => ExitCode::Usage,
             Self::Transfer(e) => match e {
-                drop2_transfer::TransferError::NotFound(_) | drop2_transfer::TransferError::Unreadable(_) | drop2_transfer::TransferError::BrokenSymlink(_) => ExitCode::Path,
+                drop2_transfer::TransferError::NotFound(_)
+                | drop2_transfer::TransferError::Unreadable(_)
+                | drop2_transfer::TransferError::BrokenSymlink(_) => ExitCode::Path,
                 _ => ExitCode::Runtime,
             },
             Self::Local(e) => match e {
-                drop2_local::LocalError::PinRejected | drop2_local::LocalError::PinRequired => ExitCode::Auth,
+                drop2_local::LocalError::PinRejected | drop2_local::LocalError::PinRequired => {
+                    ExitCode::Auth
+                }
                 drop2_local::LocalError::ServerStart => ExitCode::Network,
                 _ => ExitCode::Runtime,
             },

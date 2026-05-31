@@ -148,18 +148,17 @@ pub fn decrypt_manifest(
     Ok((manifest, dek))
 }
 
-fn aead_encrypt(
-    key: &[u8; 32],
-    aad: &[u8],
-    plaintext: &[u8],
-) -> Result<Vec<u8>, CryptoError> {
+fn aead_encrypt(key: &[u8; 32], aad: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, CryptoError> {
     let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
     let mut nonce = [0u8; NONCE_LEN];
     rand::rngs::OsRng.fill_bytes(&mut nonce);
     let ciphertext = cipher
         .encrypt(
             XNonce::from_slice(&nonce),
-            Payload { msg: plaintext, aad },
+            Payload {
+                msg: plaintext,
+                aad,
+            },
         )
         .map_err(|_| CryptoError::Encrypt)?;
     let mut out = Vec::with_capacity(NONCE_LEN + ciphertext.len());
@@ -175,10 +174,7 @@ fn aead_decrypt(key: &[u8; 32], aad: &[u8], blob: &[u8]) -> Result<Vec<u8>, Cryp
     let (nonce, body) = blob.split_at(NONCE_LEN);
     let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
     cipher
-        .decrypt(
-            XNonce::from_slice(nonce),
-            Payload { msg: body, aad },
-        )
+        .decrypt(XNonce::from_slice(nonce), Payload { msg: body, aad })
         .map_err(|_| CryptoError::Decrypt)
 }
 
@@ -189,13 +185,8 @@ mod tests {
     #[test]
     fn manifest_roundtrip() {
         let material = StoredShareMaterial::generate();
-        let manifest = StoredManifestPlain::new(
-            StoredKind::File,
-            "report.pdf",
-            4096,
-            1,
-            &material.dek,
-        );
+        let manifest =
+            StoredManifestPlain::new(StoredKind::File, "report.pdf", 4096, 1, &material.dek);
         let enc = encrypt_manifest(&manifest, &material.capability).unwrap();
         let (dec, dek) = decrypt_manifest(&enc, &material.capability).unwrap();
         assert_eq!(dec.display_name, "report.pdf");
@@ -214,13 +205,7 @@ mod tests {
     #[test]
     fn wrong_capability_fails_decrypt() {
         let material = StoredShareMaterial::generate();
-        let manifest = StoredManifestPlain::new(
-            StoredKind::File,
-            "x.bin",
-            100,
-            1,
-            &material.dek,
-        );
+        let manifest = StoredManifestPlain::new(StoredKind::File, "x.bin", 100, 1, &material.dek);
         let enc = encrypt_manifest(&manifest, &material.capability).unwrap();
         let other = CapabilitySecret::generate();
         assert!(decrypt_manifest(&enc, &other).is_err());

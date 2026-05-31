@@ -27,7 +27,7 @@
     {
       "binding": "DB",
       "database_name": "drop2-db",
-      "database_id": "0eef7701-6078-469d-a07a-ce9d09240d41",
+      "database_id": "d8eb0a8b-7e81-4e0b-957f-1e8ffcc34758",
       "migrations_dir": "migrations"
     }
   ],
@@ -41,5 +41,11 @@
     "crons": [
       "0 * * * *"
     ]
-  }
+  },
+  "routes": [
+    {
+      "pattern": "drop2.app/*",
+      "zone_name": "drop2.app"
+    }
+  ]
 }

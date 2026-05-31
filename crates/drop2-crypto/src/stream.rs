@@ -1,7 +1,7 @@
 use zeroize::Zeroizing;
 
-use crate::aead::{ChunkDecryptor, ChunkEncryptor, CHUNK_PLAINTEXT_SIZE};
 use crate::aead::FRAME_TAG_SIZE;
+use crate::aead::{ChunkDecryptor, ChunkEncryptor, CHUNK_PLAINTEXT_SIZE};
 use crate::error::CryptoError;
 
 const TAG_SIZE: usize = FRAME_TAG_SIZE;
@@ -32,9 +32,11 @@ pub fn decrypt_frame_stream(
         if offset + 4 > frames.len() {
             return Err(CryptoError::Decrypt);
         }
-        let plain_len =
-            u32::from_le_bytes(frames[offset..offset + 4].try_into().map_err(|_| CryptoError::Decrypt)?)
-                as usize;
+        let plain_len = u32::from_le_bytes(
+            frames[offset..offset + 4]
+                .try_into()
+                .map_err(|_| CryptoError::Decrypt)?,
+        ) as usize;
         let frame_len = 4 + plain_len + TAG_SIZE;
         if offset + frame_len > frames.len() {
             return Err(CryptoError::Decrypt);
@@ -108,7 +110,10 @@ mod tests {
             .decode(fixture["plaintext_b64"].as_str().expect("plaintext"))
             .expect("valid plaintext");
 
-        assert_eq!(decrypt_frame_stream(key, &frames).expect("decrypt"), expected);
+        assert_eq!(
+            decrypt_frame_stream(key, &frames).expect("decrypt"),
+            expected
+        );
     }
 
     #[test]

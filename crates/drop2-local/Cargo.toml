@@ -8,13 +8,16 @@ build = "build.rs"
 
 [dependencies]
 axum.workspace = true
+axum-server = { version = "0.7", features = ["tls-rustls-no-provider"] }
 base64.workspace = true
 bytes.workspace = true
 futures = "0.3"
 local-ip-address.workspace = true
 mime_guess = "2.0"
 pin-project-lite = "0.2"
+rcgen = "0.13"
 rust-embed.workspace = true
+rustls = { version = "0.23", features = ["ring"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 drop2-crypto = { path = "../drop2-crypto" }

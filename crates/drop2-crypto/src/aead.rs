@@ -78,8 +78,8 @@ impl ChunkDecryptor {
         if frame.len() < 4 + FRAME_TAG_SIZE {
             return Err(CryptoError::Decrypt);
         }
-        let plain_len = u32::from_le_bytes(frame[..4].try_into().map_err(|_| CryptoError::Decrypt)?)
-            as usize;
+        let plain_len =
+            u32::from_le_bytes(frame[..4].try_into().map_err(|_| CryptoError::Decrypt)?) as usize;
         let frame_len = 4 + plain_len + FRAME_TAG_SIZE;
         if frame.len() != frame_len {
             return Err(CryptoError::Decrypt);

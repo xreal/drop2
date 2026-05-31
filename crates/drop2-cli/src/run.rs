@@ -1,12 +1,13 @@
 use std::time::Duration;
 
 use drop2_core::{
-    default_stored_expiry, is_hosted_available, parse_duration, print_hosted_share, print_local_share,
-    print_receive, print_stored_share, run_hosted_share, run_local_share, run_receive, run_stored_share,
-    ExitCode, HostedShareOptions, LocalShareOptions, ReceiveOptions, StoredShareOptions,
+    default_stored_expiry, is_hosted_available, parse_duration, print_hosted_share,
+    print_local_share, print_receive, print_stored_share, run_hosted_share, run_local_share,
+    run_receive, run_stored_share, ExitCode, HostedDownloadEvent, HostedShareOptions,
+    LocalDownloadEvent, LocalShareOptions, ReceiveOptions, StoredShareOptions,
 };
 use drop2_crypto::Pin;
-use tokio::signal;
+use tokio::{select, signal};
 
 use crate::args::{Cli, Command};
 
@@ -19,7 +20,12 @@ pub async fn execute(cli: Cli) -> i32 {
     }
 
     match &cli.command {
-        Some(Command::Get { url, output, pin, password }) => {
+        Some(Command::Get {
+            url,
+            output,
+            pin,
+            password,
+        }) => {
             if *password {
                 eprintln!("error: --password is not implemented yet");
                 return ExitCode::Usage.as_i32();
@@ -113,11 +119,7 @@ async fn send_stored(
     ExitCode::Success.as_i32()
 }
 
-async fn receive(
-    url: String,
-    pin: Option<String>,
-    output: Option<std::path::PathBuf>,
-) -> i32 {
+async fn receive(url: String, pin: Option<String>, output: Option<std::path::PathBuf>) -> i32 {
     let pin = match parse_pin(pin.as_deref()) {
         Ok(pin) => pin,
         Err(code) => return code,
@@ -143,12 +145,10 @@ async fn receive(
 
 fn parse_pin(raw: Option<&str>) -> Result<Option<Pin>, i32> {
     match raw {
-        Some(value) => Pin::parse(value)
-            .map(Some)
-            .map_err(|err| {
-                eprintln!("error: {err}");
-                ExitCode::Usage.as_i32()
-            }),
+        Some(value) => Pin::parse(value).map(Some).map_err(|err| {
+            eprintln!("error: {err}");
+            ExitCode::Usage.as_i32()
+        }),
         None => Ok(None),
     }
 }
@@ -176,6 +176,8 @@ async fn send_hosted(
     };
 
     print_hosted_share(&outcome);
+    let mut started_count = 0usize;
+    let mut completed_count = 0usize;
 
     if open {
         if let Err(err) = open::that(&outcome.share_url) {
@@ -183,10 +185,25 @@ async fn send_hosted(
         }
     }
 
-    let wait_result = outcome.handle.wait_until_shutdown().await;
+    let wait_result = outcome
+        .handle
+        .wait_until_shutdown_with_events(|event| match event {
+            HostedDownloadEvent::DownloadStarted => {
+                started_count += 1;
+                println!("Status: download started");
+            }
+            HostedDownloadEvent::DownloadCompleted => {
+                completed_count += 1;
+                println!("Status: download completed");
+            }
+        })
+        .await;
 
     match wait_result {
         Ok(()) => {
+            if completed_count == 0 {
+                println!("Status: download completed");
+            }
             println!("Status: completed");
             ExitCode::Success.as_i32()
         }
@@ -217,16 +234,41 @@ async fn send_local(
     };
 
     print_local_share(&result);
+    let mut started_count = 0usize;
+    let mut completed_count = 0usize;
 
     if open {
-        let url = format!("http://127.0.0.1:{}", result.handle.urls.bind_addr.port());
-        if let Err(err) = open::that(&url) {
+        if let Err(err) = open::that(&result.handle.urls.loopback_url) {
             eprintln!("warning: could not open browser: {err}");
         }
     }
 
-    if wait_for_shutdown().await.is_err() {
-        return ExitCode::Cancelled.as_i32();
+    loop {
+        select! {
+            event = result.handle.next_transfer_event() => {
+                match event {
+                    Some(LocalDownloadEvent::DownloadStarted) => {
+                        started_count += 1;
+                        println!("Status: download started");
+                    }
+                    Some(LocalDownloadEvent::DownloadCompleted) => {
+                        completed_count += 1;
+                        println!("Status: download completed");
+                    }
+                    None => break,
+                }
+            }
+            shutdown = wait_for_shutdown() => {
+                if shutdown.is_err() {
+                    return ExitCode::Cancelled.as_i32();
+                }
+                break;
+            }
+        }
+    }
+
+    if started_count > completed_count {
+        println!("Status: download interrupted");
     }
 
     result.handle.stop();

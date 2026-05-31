@@ -3,7 +3,9 @@ use std::time::Duration;
 use tokio::fs;
 
 use drop2_crypto::{generate_pin, CapabilitySecret, Pin};
-use drop2_hosted::{api_base_from_env, check_reachable, download_stored_share, upload_stored_share};
+use drop2_hosted::{
+    api_base_from_env, check_reachable, download_stored_share, upload_stored_share,
+};
 use drop2_transfer::inspect_path;
 
 use crate::error::CoreError;
@@ -68,10 +70,9 @@ pub async fn run_receive(opts: ReceiveOptions) -> Result<ReceiveOutcome, CoreErr
         return Err(CoreError::NetworkUnavailable);
     }
 
-    let capability = parsed
-        .capability
-        .as_ref()
-        .ok_or_else(|| CoreError::Usage("stored share URL missing capability secret (#...)".into()))?;
+    let capability = parsed.capability.as_ref().ok_or_else(|| {
+        CoreError::Usage("stored share URL missing capability secret (#...)".into())
+    })?;
 
     let result = download_stored_share(&config, &parsed.share_id, capability, opts.pin.as_ref())
         .await
@@ -105,7 +106,8 @@ fn parse_share_url(raw: &str) -> Result<ParsedShareUrl, CoreError> {
         .ok_or_else(|| CoreError::Usage("expected share url path /s/<share-id>".into()))?
         .to_string();
 
-    drop2_crypto::ShareId::parse(&share_id).map_err(|_| CoreError::Usage("invalid share id".into()))?;
+    drop2_crypto::ShareId::parse(&share_id)
+        .map_err(|_| CoreError::Usage("invalid share id".into()))?;
 
     let capability = fragment
         .as_deref()
@@ -125,9 +127,7 @@ fn resolve_output_path(
     output: Option<&Path>,
 ) -> Result<std::path::PathBuf, CoreError> {
     match output {
-        Some(path) if path.is_dir() || path.as_os_str().is_empty() => {
-            Ok(path.join(display_name))
-        }
+        Some(path) if path.is_dir() || path.as_os_str().is_empty() => Ok(path.join(display_name)),
         Some(path) => Ok(path.to_path_buf()),
         None => Ok(std::env::current_dir()
             .map_err(|e| CoreError::Runtime(e.to_string()))?

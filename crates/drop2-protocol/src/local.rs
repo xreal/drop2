@@ -22,6 +22,7 @@ pub struct LocalShareInfo {
     pub name: String,
     pub size: u64,
     pub pin_required: bool,
+    pub status: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

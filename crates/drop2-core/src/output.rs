@@ -5,8 +5,8 @@ pub fn print_local_share(result: &LocalShareResult) {
     println!("Sharing: {}", result.display_name);
     println!("Mode: Live (LAN)");
     println!("Share ID: {}", urls.share_id);
-    println!("Local URL: http://{}", urls.lan_addr);
-    println!("Loopback: http://127.0.0.1:{}", urls.bind_addr.port());
+    println!("Local URL: {}", urls.local_url);
+    println!("Loopback: {}", urls.loopback_url);
     if let Some(pin) = result.pin {
         println!("PIN: {pin}");
     }

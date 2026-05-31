@@ -16,6 +16,7 @@ import {
   isJoinTokenValid,
   issueJoinToken,
 } from './live-join-token';
+import { transferCompleteTransition } from './live-share-state';
 
 interface StoredState {
   share_id: string;
@@ -351,10 +352,45 @@ export class LiveShareDO extends DurableObject<Env> {
     }
 
     if (msg.type === 'transfer_complete') {
-      if (this.receiverSocket?.readyState === WebSocket.OPEN) {
-        this.sendControl(this.receiverSocket, { type: 'transfer_complete' });
-      }
-      void this.closeShare('completed');
+      void this.completeTransfer();
+    }
+  }
+
+  private async completeTransfer() {
+    if (!this.state) {
+      return;
+    }
+
+    const transition = transferCompleteTransition(this.state.status);
+    if (!transition) {
+      return;
+    }
+
+    this.state.status = transition.nextStatus;
+    if (transition.clearJoinToken) {
+      clearJoinToken(this.state);
+    }
+    await this.persist();
+    await this.ctx.storage.deleteAlarm();
+
+    for (const waiter of this.joinWaiters.values()) {
+      clearTimeout(waiter.timer);
+      waiter.reject(new Error('share closed'));
+    }
+    this.joinWaiters.clear();
+
+    if (this.receiverSocket?.readyState === WebSocket.OPEN) {
+      this.sendControl(this.receiverSocket, { type: 'transfer_complete' });
+    }
+
+    if (transition.closeSender) {
+      this.senderSocket?.close(1000, 'completed');
+      this.senderSocket = null;
+    }
+
+    if (transition.closeReceiver) {
+      this.receiverSocket?.close(1000, 'completed');
+      this.receiverSocket = null;
     }
   }
 
