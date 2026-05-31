@@ -24,7 +24,10 @@ pub struct StoredShareOutcome {
 }
 
 pub async fn run_stored_share(opts: StoredShareOptions) -> Result<StoredShareOutcome, CoreError> {
-    let input = inspect_path(Path::new(&opts.path))?;
+    let mut input = inspect_path(Path::new(&opts.path))?;
+    if let Some(name) = opts.name {
+        input.display_name = name;
+    }
     let config = api_base_from_env();
 
     if !check_reachable(&config).await {
@@ -86,13 +89,6 @@ pub async fn run_receive(opts: ReceiveOptions) -> Result<ReceiveOutcome, CoreErr
 struct ParsedShareUrl {
     share_id: String,
     capability: Option<CapabilitySecret>,
-    mode_hint: ShareUrlMode,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ShareUrlMode {
-    Hosted,
-    Unknown,
 }
 
 fn parse_share_url(raw: &str) -> Result<ParsedShareUrl, CoreError> {
@@ -118,7 +114,6 @@ fn parse_share_url(raw: &str) -> Result<ParsedShareUrl, CoreError> {
     Ok(ParsedShareUrl {
         share_id,
         capability,
-        mode_hint: ShareUrlMode::Hosted,
     })
 }
 
