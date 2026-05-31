@@ -10,6 +10,7 @@ anyhow.workspace = true
 local-ip-address.workspace = true
 serde = { workspace = true, features = ["derive"] }
 shr-crypto = { path = "../shr-crypto" }
+shr-hosted = { path = "../shr-hosted" }
 shr-local = { path = "../shr-local" }
 shr-protocol = { path = "../shr-protocol" }
 shr-transfer = { path = "../shr-transfer" }

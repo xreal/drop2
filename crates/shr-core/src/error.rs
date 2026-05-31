@@ -31,6 +31,8 @@ pub enum CoreError {
     NetworkUnavailable,
     #[error("operation cancelled")]
     Cancelled,
+    #[error("{0}")]
+    Runtime(String),
 }
 
 impl CoreError {
@@ -48,6 +50,7 @@ impl CoreError {
             },
             Self::NetworkUnavailable => ExitCode::Network,
             Self::Cancelled => ExitCode::Cancelled,
+            Self::Runtime(_) => ExitCode::Runtime,
         }
     }
 }
