@@ -11,6 +11,11 @@ import {
   globalIpBlocked,
   recordGlobalAccessFailure,
 } from './access-guard';
+import {
+  clearJoinToken,
+  isJoinTokenValid,
+  issueJoinToken,
+} from './live-join-token';
 
 interface StoredState {
   share_id: string;
@@ -25,6 +30,7 @@ interface StoredState {
   created_at: number;
   wait_expires_at: number;
   join_token: string | null;
+  join_token_expires_at: number | null;
   join_version: number;
   failed_pins: Record<string, number>;
   cooldown_until: Record<string, number>;
@@ -102,6 +108,7 @@ export class LiveShareDO extends DurableObject<Env> {
       created_at: now,
       wait_expires_at: now + params.wait_seconds * 1000,
       join_token: null,
+      join_token_expires_at: null,
       join_version: 0,
       failed_pins: {},
       cooldown_until: {},
@@ -197,8 +204,9 @@ export class LiveShareDO extends DurableObject<Env> {
 
     s.join_version += 1;
     const version = s.join_version;
-    const joinToken = crypto.randomUUID();
-    s.join_token = joinToken;
+    const issued = issueJoinToken(Date.now(), crypto.randomUUID());
+    s.join_token = issued.joinToken;
+    s.join_token_expires_at = issued.joinTokenExpiresAt;
     s.status = 'waiting';
     await this.persist();
 
@@ -208,11 +216,11 @@ export class LiveShareDO extends DurableObject<Env> {
       await this.persist();
       return json({
         server_public_key: serverKey,
-        join_token: joinToken,
+        join_token: issued.joinToken,
         status: s.status,
       });
     } catch {
-      s.join_token = null;
+      clearJoinToken(s);
       s.status = 'waiting';
       await this.persist();
       return json({ error: 'join failed' }, 502);
@@ -248,7 +256,7 @@ export class LiveShareDO extends DurableObject<Env> {
       this.attachSender(server);
       this.sendState(server, s.status);
     } else if (role === 'receiver') {
-      if (!s.join_token || token !== s.join_token) {
+      if (!isJoinTokenValid(token, s.join_token, s.join_token_expires_at, Date.now())) {
         server.close(4401, 'invalid join token');
         return new Response(null, { status: 101, webSocket: client });
       }
@@ -256,6 +264,8 @@ export class LiveShareDO extends DurableObject<Env> {
         server.close(1008, 'receiver already connected');
         return new Response(null, { status: 101, webSocket: client });
       }
+      clearJoinToken(s);
+      await this.persist();
       this.receiverSocket = server;
       this.attachReceiver(server);
       if (this.senderSocket?.readyState === WebSocket.OPEN) {

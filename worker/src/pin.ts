@@ -1,12 +1,37 @@
 const ITERATIONS = 100_000;
 const SALT_LEN = 16;
 const HASH_LEN = 32;
+const B64URL_RE = /^[A-Za-z0-9_-]+$/;
 
 function b64urlDecode(str: string): Uint8Array {
   const pad = str.length % 4 === 0 ? '' : '='.repeat(4 - (str.length % 4));
   const b64 = str.replace(/-/g, '+').replace(/_/g, '/') + pad;
   const bin = atob(b64);
   return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+}
+
+function decodePinnedValue(str: string, expectedLength: number): Uint8Array | null {
+  if (!B64URL_RE.test(str)) return null;
+  try {
+    const value = b64urlDecode(str);
+    if (value.length !== expectedLength) return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+export function validPinMaterial(pinSalt: string, pinHash: string): boolean {
+  if (pinSalt.length === 0 && pinHash.length === 0) {
+    return true;
+  }
+  if (pinSalt.length === 0 || pinHash.length === 0) {
+    return false;
+  }
+  return (
+    decodePinnedValue(pinSalt, SALT_LEN) !== null &&
+    decodePinnedValue(pinHash, HASH_LEN) !== null
+  );
 }
 
 async function derive(salt: Uint8Array, pin: string): Promise<Uint8Array> {
@@ -38,9 +63,9 @@ export async function verifyPin(
   hashB64: string,
 ): Promise<boolean> {
   if (!/^\d{4}$/.test(pin)) return false;
-  const salt = b64urlDecode(saltB64);
-  const expected = b64urlDecode(hashB64);
-  if (salt.length !== SALT_LEN || expected.length !== HASH_LEN) return false;
+  const salt = decodePinnedValue(saltB64, SALT_LEN);
+  const expected = decodePinnedValue(hashB64, HASH_LEN);
+  if (!salt || !expected) return false;
   const actual = await derive(salt, pin);
   return constantTimeEq(actual, expected);
 }

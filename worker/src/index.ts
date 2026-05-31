@@ -13,6 +13,7 @@ import {
   uploadChunk,
   uploadManifest,
 } from './stored-share';
+import { validPinMaterial } from './pin';
 
 export { LiveShareDO };
 
@@ -182,6 +183,9 @@ async function createLiveShare(
     return jsonError('invalid wait timeout', 400);
   }
   if (typeof pinSalt !== 'string' || typeof pinHash !== 'string') {
+    return jsonError('invalid pin material', 400);
+  }
+  if (!validPinMaterial(pinSalt, pinHash)) {
     return jsonError('invalid pin material', 400);
   }
 
