@@ -1,0 +1,13 @@
+{
+  "name": "shr-receiver",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/app.js --bundle --format=esm --outfile=app.bundle.js --minify"
+  },
+  "devDependencies": {
+    "@noble/ciphers": "1.3.0",
+    "@noble/curves": "1.9.2",
+    "@noble/hashes": "1.8.0",
+    "esbuild": "0.25.0"
+  }
+}
