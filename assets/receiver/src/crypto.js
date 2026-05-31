@@ -33,7 +33,7 @@ function deriveChunkKey(contentKey, index) {
 export async function joinAndDownload({ pinRequired, onProgress, onStatus }) {
   onStatus('Preparing secure session…');
 
-  const privateKey = x25519.utils.randomSecretKey();
+  const privateKey = x25519.utils.randomPrivateKey();
   const publicKey = x25519.getPublicKey(privateKey);
 
   const joinBody = {
@@ -79,19 +79,23 @@ export async function joinAndDownload({ pinRequired, onProgress, onStatus }) {
     frameBuffer = concat(frameBuffer, value);
 
     while (frameBuffer.length >= 4) {
-      const plainLen = new DataView(frameBuffer.buffer, frameBuffer.byteOffset, 4).getUint32(0, true);
+      const plainLen = new DataView(
+        frameBuffer.buffer,
+        frameBuffer.byteOffset,
+        4,
+      ).getUint32(0, true);
       const frameLen = 4 + plainLen + 16;
       if (frameBuffer.length < frameLen) break;
 
-      const frame = frameBuffer.slice(0, frameLen);
-      frameBuffer = frameBuffer.slice(frameLen);
+      const frame = frameBuffer.subarray(0, frameLen);
+      frameBuffer = frameBuffer.subarray(frameLen);
 
-      const ciphertext = frame.slice(4);
+      const ciphertext = frame.subarray(4);
       const key = deriveChunkKey(contentKey, chunkIndex);
       const nonce = new Uint8Array(24);
       new DataView(nonce.buffer).setBigUint64(0, chunkIndex, true);
-      const aead = xchacha20poly1305(key, nonce);
-      const plain = aead.decrypt(ciphertext, enc.encode('shr.v1.chunk'));
+      const aead = xchacha20poly1305(key, nonce, enc.encode('shr.v1.chunk'));
+      const plain = aead.decrypt(ciphertext);
       plainChunks.push(plain);
       chunkIndex += 1n;
       onProgress(plainChunks.reduce((n, c) => n + c.length, 0));

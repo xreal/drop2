@@ -169,7 +169,6 @@ fn write_end_record(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
     use tempfile::tempdir;
 
     #[test]

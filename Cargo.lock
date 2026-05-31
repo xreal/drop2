@@ -1820,6 +1820,7 @@ dependencies = [
  "hex",
  "hkdf",
  "rand 0.8.6",
+ "serde_json",
  "sha2",
  "thiserror",
  "x25519-dalek",
