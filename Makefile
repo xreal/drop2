@@ -1,4 +1,4 @@
-.PHONY: all build release install test check clean receiver worker-install worker-typecheck worker-test bench
+.PHONY: all build release install test check clean receiver receiver-install receiver-test worker-install worker-typecheck worker-test bench
 
 RECEIVER_DIR := assets/receiver
 CLI_CRATE := crates/drop2-cli
@@ -18,10 +18,16 @@ release: receiver
 install: release
 	cargo install --path $(CLI_CRATE) --force
 
+receiver-install:
+	cd $(RECEIVER_DIR) && npm install
+
+receiver-test: receiver-install
+	cd $(RECEIVER_DIR) && npm test
+
 test:
 	cargo test
-	cd $(RECEIVER_DIR) && npm test
-	cd $(WORKER_DIR) && npm test
+	$(MAKE) receiver-test
+	$(MAKE) worker-test
 
 check: test worker-typecheck
 
