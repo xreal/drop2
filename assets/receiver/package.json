@@ -1,6 +1,7 @@
 {
   "name": "shr-receiver",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "esbuild src/app.js --bundle --format=esm --outfile=app.bundle.js --minify",
     "test": "node --test test/*.test.mjs"

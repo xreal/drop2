@@ -27,7 +27,12 @@ pub fn inspect_path(path: &Path) -> Result<ShareInput, TransferError> {
         let target = std::fs::read_link(path).map_err(|_| {
             TransferError::Unreadable(path.display().to_string())
         })?;
-        if !target.exists() {
+        let resolved_target = if target.is_absolute() {
+            target
+        } else {
+            path.parent().unwrap_or(Path::new(".")).join(target)
+        };
+        if !resolved_target.exists() {
             return Err(TransferError::BrokenSymlink(path.display().to_string()));
         }
         return inspect_path(&path.canonicalize().map_err(|_| {
@@ -90,6 +95,9 @@ mod tests {
     use std::io::Write;
     use tempfile::tempdir;
 
+    #[cfg(unix)]
+    use std::os::unix::fs::symlink;
+
     #[test]
     fn inspect_file() {
         let dir = tempdir().unwrap();
@@ -106,5 +114,21 @@ mod tests {
     #[test]
     fn missing_path_errors() {
         assert!(inspect_path(Path::new("/no/such/shr-path")).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn relative_symlink_resolves_from_parent_directory() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("note.txt");
+        let link = dir.path().join("note-link.txt");
+        std::fs::write(&file, b"hello").unwrap();
+        symlink("note.txt", &link).unwrap();
+
+        let input = inspect_path(&link).unwrap();
+
+        assert_eq!(input.kind, InputKind::File);
+        assert_eq!(input.size, 5);
+        assert_eq!(input.display_name, "note.txt");
     }
 }

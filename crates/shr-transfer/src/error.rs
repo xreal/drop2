@@ -10,6 +10,8 @@ pub enum TransferError {
     BrokenSymlink(String),
     #[error("path is neither a file nor a directory")]
     InvalidKind,
+    #[error("zip archive exceeds store-only limits: {0}")]
+    ArchiveLimit(&'static str),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]

@@ -10,11 +10,27 @@ export type LiveShareStatus =
   | 'cancelled'
   | 'failed';
 
-export interface WsControl {
-  type: string;
-  client_public_key?: string;
-  server_public_key?: string;
-  code?: string;
-  message?: string;
-  status?: LiveShareStatus;
-}
+export type WsControl =
+  | {
+      type: 'join_request';
+      client_public_key: string;
+    }
+  | {
+      type: 'join_response';
+      server_public_key: string;
+    }
+  | {
+      type: 'receiver_connected';
+    }
+  | {
+      type: 'transfer_complete';
+    }
+  | {
+      type: 'error';
+      code: string;
+      message: string;
+    }
+  | {
+      type: 'state';
+      status: LiveShareStatus;
+    };

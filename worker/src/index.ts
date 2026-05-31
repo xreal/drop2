@@ -4,6 +4,8 @@ import { generateShareId, isValidShareId } from './share-id';
 
 export { LiveShareDO };
 
+const MAX_WAIT_SECONDS = 7 * 24 * 60 * 60;
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -106,10 +108,10 @@ async function createLiveShare(
   if (typeof name !== 'string' || !name) {
     return jsonError('invalid name', 400);
   }
-  if (typeof size !== 'number' || size < 0) {
+  if (!isNonNegativeSafeInteger(size)) {
     return jsonError('invalid size', 400);
   }
-  if (typeof waitSeconds !== 'number' || waitSeconds < 1) {
+  if (!isWaitSeconds(waitSeconds)) {
     return jsonError('invalid wait timeout', 400);
   }
   if (typeof pinSalt !== 'string' || typeof pinHash !== 'string') {
@@ -236,4 +238,17 @@ async function cancelLiveShare(
 
 function jsonError(message: string, status: number): Response {
   return Response.json({ error: message }, { status });
+}
+
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isWaitSeconds(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isSafeInteger(value) &&
+    value >= 1 &&
+    value <= MAX_WAIT_SECONDS
+  );
 }

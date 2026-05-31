@@ -1,7 +1,11 @@
 import { x25519 } from '@noble/curves/ed25519';
 import { hkdf } from '@noble/hashes/hkdf';
 import { sha256 } from '@noble/hashes/sha256';
-import { xchacha20poly1305 } from '@noble/ciphers/chacha';
+import {
+  appendEncryptedFrames,
+  createFrameState,
+  finalizeEncryptedFrames,
+} from './frame-stream.js';
 
 const enc = new TextEncoder();
 
@@ -20,13 +24,6 @@ function b64urlDecode(str) {
 
 function deriveContentKey(sharedSecret) {
   return hkdf(sha256, sharedSecret, undefined, enc.encode('shr.v1.content'), 32);
-}
-
-function deriveChunkKey(contentKey, index) {
-  const indexBytes = new Uint8Array(8);
-  new DataView(indexBytes.buffer).setBigUint64(0, index, true);
-  const info = concat(enc.encode('shr.v1.chunk'), indexBytes);
-  return hkdf(sha256, contentKey, undefined, info, 32);
 }
 
 export function detectShareContext() {
@@ -93,7 +90,12 @@ async function joinLocal({ info, onProgress, onStatus }) {
     throw new Error(await streamRes.text());
   }
 
-  return readHttpStream(streamRes.body.getReader(), contentKey, onProgress);
+  return readHttpStream(
+    streamRes.body.getReader(),
+    contentKey,
+    onProgress,
+    expectedPlaintextSize(info),
+  );
 }
 
 async function joinHosted({ ctx, info, onProgress, onStatus }) {
@@ -131,101 +133,95 @@ async function joinHosted({ ctx, info, onProgress, onStatus }) {
   const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${wsProto}//${window.location.host}${access.connect_url}`;
 
-  return receiveWebSocket(wsUrl, contentKey, onProgress);
+  return receiveWebSocket(wsUrl, contentKey, onProgress, expectedPlaintextSize(info));
 }
 
-function receiveWebSocket(wsUrl, contentKey, onProgress) {
+function receiveWebSocket(wsUrl, contentKey, onProgress, expectedBytes) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer';
 
-    let frameBuffer = new Uint8Array(0);
-    let chunkIndex = 0n;
-    const plainChunks = [];
+    const state = createFrameState();
+    let transferComplete = false;
+    let settled = false;
+
+    function finish() {
+      if (settled) return;
+      settled = true;
+      try {
+        resolve(
+          finalizeEncryptedFrames(state, {
+            expectedBytes,
+            requireTransferComplete: true,
+            transferComplete,
+          }),
+        );
+      } catch (error) {
+        reject(error);
+      }
+    }
 
     ws.onmessage = (event) => {
-      if (typeof event.data === 'string') return;
-      frameBuffer = concat(frameBuffer, new Uint8Array(event.data));
+      if (typeof event.data === 'string') {
+        const msg = parseWsControl(event.data);
+        if (msg?.type === 'transfer_complete') {
+          transferComplete = true;
+          finish();
+        } else if (msg?.type === 'error') {
+          settled = true;
+          reject(new Error(msg.message || 'Transfer failed'));
+        }
+        return;
+      }
 
-      while (frameBuffer.length >= 4) {
-        const plainLen = new DataView(
-          frameBuffer.buffer,
-          frameBuffer.byteOffset,
-          4,
-        ).getUint32(0, true);
-        const frameLen = 4 + plainLen + 16;
-        if (frameBuffer.length < frameLen) break;
-
-        const frame = frameBuffer.subarray(0, frameLen);
-        frameBuffer = frameBuffer.subarray(frameLen);
-
-        const ciphertext = frame.subarray(4);
-        const key = deriveChunkKey(contentKey, chunkIndex);
-        const nonce = new Uint8Array(24);
-        new DataView(nonce.buffer).setBigUint64(0, chunkIndex, true);
-        const aead = xchacha20poly1305(key, nonce, enc.encode('shr.v1.chunk'));
-        const plain = aead.decrypt(ciphertext);
-        plainChunks.push(plain);
-        chunkIndex += 1n;
-        onProgress(plainChunks.reduce((n, c) => n + c.length, 0));
+      try {
+        onProgress(appendEncryptedFrames(state, new Uint8Array(event.data), contentKey));
+      } catch (error) {
+        settled = true;
+        reject(error);
+        ws.close();
       }
     };
 
-    ws.onerror = () => reject(new Error('Connection failed'));
-    ws.onclose = (event) => {
-      if (event.wasClean || plainChunks.length > 0) {
-        resolve(concat(...plainChunks));
-      } else {
-        reject(new Error('Connection closed'));
+    ws.onerror = () => {
+      if (!settled) {
+        settled = true;
+        reject(new Error('Connection failed'));
+      }
+    };
+    ws.onclose = () => {
+      if (!settled) {
+        if (transferComplete) {
+          finish();
+        } else {
+          settled = true;
+          reject(new Error('Transfer incomplete'));
+        }
       }
     };
   });
 }
 
-async function readHttpStream(reader, contentKey, onProgress) {
-  let frameBuffer = new Uint8Array(0);
-  let chunkIndex = 0n;
-  const plainChunks = [];
+async function readHttpStream(reader, contentKey, onProgress, expectedBytes) {
+  const state = createFrameState();
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    frameBuffer = concat(frameBuffer, value);
-
-    while (frameBuffer.length >= 4) {
-      const plainLen = new DataView(
-        frameBuffer.buffer,
-        frameBuffer.byteOffset,
-        4,
-      ).getUint32(0, true);
-      const frameLen = 4 + plainLen + 16;
-      if (frameBuffer.length < frameLen) break;
-
-      const frame = frameBuffer.subarray(0, frameLen);
-      frameBuffer = frameBuffer.subarray(frameLen);
-
-      const ciphertext = frame.subarray(4);
-      const key = deriveChunkKey(contentKey, chunkIndex);
-      const nonce = new Uint8Array(24);
-      new DataView(nonce.buffer).setBigUint64(0, chunkIndex, true);
-      const aead = xchacha20poly1305(key, nonce, enc.encode('shr.v1.chunk'));
-      const plain = aead.decrypt(ciphertext);
-      plainChunks.push(plain);
-      chunkIndex += 1n;
-      onProgress(plainChunks.reduce((n, c) => n + c.length, 0));
-    }
+    onProgress(appendEncryptedFrames(state, value, contentKey));
   }
 
-  return concat(...plainChunks);
+  return finalizeEncryptedFrames(state, { expectedBytes });
 }
 
-function concat(...parts) {
-  const total = parts.reduce((n, p) => n + p.length, 0);
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (const p of parts) {
-    out.set(p, offset);
-    offset += p.length;
+function expectedPlaintextSize(info) {
+  return info.kind === 'file' ? info.size : undefined;
+}
+
+function parseWsControl(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
   }
-  return out;
 }

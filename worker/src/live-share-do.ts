@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Env, InitLiveShareParams, LiveShareInfoResponse } from './types';
 import type { LiveShareStatus, ShareKind, WsControl } from './protocol';
+import { pruneAbuseTracking, recordFailedPin } from './abuse-tracking';
 import { verifyPin, pinRequired } from './pin';
 import { isValidShareId } from './share-id';
 
@@ -122,17 +123,18 @@ export class LiveShareDO extends DurableObject<Env> {
   }
 
   private async handleAdmit(request: Request): Promise<Response> {
-    const s = this.requireState();
-    if ('error' in s) return s.error;
+    const state = this.requireState();
+    if ('error' in state) return denyAccess();
+    const s = state;
 
     if (s.status === 'expired' || s.status === 'cancelled' || s.status === 'completed') {
-      return json({ error: 'share unavailable' }, 410);
+      return denyAccess();
     }
     if (s.status === 'active') {
-      return json({ error: 'share busy' }, 409);
+      return denyAccess();
     }
     if (!this.senderSocket || this.senderSocket.readyState !== WebSocket.OPEN) {
-      return json({ error: 'sender not connected' }, 503);
+      return denyAccess();
     }
 
     let body: { client_public_key?: string; pin?: string };
@@ -147,25 +149,32 @@ export class LiveShareDO extends DurableObject<Env> {
 
     const ip = request.headers.get('x-shr-ip') ?? 'unknown';
     const ipKey = await hashIp(ip);
+    const now = Date.now();
+    this.pruneAbuseTracking(now);
 
     const cooldown = s.cooldown_until[ipKey] ?? 0;
-    if (Date.now() < cooldown) {
-      return json({ error: 'too many attempts' }, 429);
+    if (now < cooldown) {
+      return denyAccess();
     }
 
     if (pinRequired(s.pin_hash)) {
       const pin = body.pin;
-      if (!pin) return json({ error: 'pin required' }, 401);
+      if (!pin) return denyAccess();
       const ok = await verifyPin(pin, s.pin_salt, s.pin_hash);
       if (!ok) {
         const fails = (s.failed_pins[ipKey] ?? 0) + 1;
-        s.failed_pins[ipKey] = fails;
-        if (fails >= MAX_PIN_FAILURES) {
-          s.cooldown_until[ipKey] = Date.now() + COOLDOWN_MS;
-        }
+        const cooldownUntil = fails >= MAX_PIN_FAILURES ? now + COOLDOWN_MS : null;
+        recordFailedPin(s, ipKey, cooldownUntil);
+        this.pruneAbuseTracking(now);
         await this.persist();
         return json({ error: 'access denied' }, 403);
       }
+    }
+
+    if (s.failed_pins[ipKey] || s.cooldown_until[ipKey]) {
+      delete s.failed_pins[ipKey];
+      delete s.cooldown_until[ipKey];
+      this.pruneAbuseTracking(now);
     }
 
     s.join_version += 1;
@@ -314,6 +323,9 @@ export class LiveShareDO extends DurableObject<Env> {
     }
 
     if (msg.type === 'transfer_complete') {
+      if (this.receiverSocket?.readyState === WebSocket.OPEN) {
+        this.sendControl(this.receiverSocket, { type: 'transfer_complete' });
+      }
       void this.closeShare('completed');
     }
   }
@@ -388,6 +400,11 @@ export class LiveShareDO extends DurableObject<Env> {
     }
   }
 
+  private pruneAbuseTracking(now: number) {
+    if (!this.state) return;
+    pruneAbuseTracking(this.state, now);
+  }
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     void this.loadState();
@@ -416,4 +433,8 @@ async function hashIp(ip: string): Promise<string> {
 
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status });
+}
+
+function denyAccess(): Response {
+  return json({ error: 'access denied' }, 403);
 }

@@ -6,6 +6,11 @@ import { dirname, join } from 'node:path';
 import { hkdf } from '@noble/hashes/hkdf';
 import { sha256 } from '@noble/hashes/sha256';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha';
+import {
+  appendEncryptedFrames,
+  createFrameState,
+  finalizeEncryptedFrames,
+} from '../src/frame-stream.js';
 
 const enc = new TextEncoder();
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -74,4 +79,40 @@ test('aad is passed at cipher construction, not decrypt output', () => {
   const sealed = aead.encrypt(message);
   const opened = aead.decrypt(sealed);
   assert.deepEqual(opened, message);
+});
+
+test('rejects truncated frame tails', () => {
+  const fixture = JSON.parse(
+    readFileSync(join(root, 'test/fixtures/frame-stream-778.json'), 'utf8'),
+  );
+  const contentKey = b64ToBytes(fixture.content_key_b64);
+  const frames = b64ToBytes(fixture.frames_b64);
+
+  const state = createFrameState();
+  appendEncryptedFrames(state, frames.subarray(0, frames.length - 1), contentKey);
+
+  assert.throws(
+    () => finalizeEncryptedFrames(state),
+    /Transfer incomplete/,
+  );
+});
+
+test('requires explicit hosted transfer completion', () => {
+  const fixture = JSON.parse(
+    readFileSync(join(root, 'test/fixtures/frame-stream-778.json'), 'utf8'),
+  );
+  const contentKey = b64ToBytes(fixture.content_key_b64);
+  const frames = b64ToBytes(fixture.frames_b64);
+
+  const state = createFrameState();
+  appendEncryptedFrames(state, frames, contentKey);
+
+  assert.throws(
+    () =>
+      finalizeEncryptedFrames(state, {
+        requireTransferComplete: true,
+        transferComplete: false,
+      }),
+    /Transfer incomplete/,
+  );
 });

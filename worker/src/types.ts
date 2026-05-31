@@ -1,4 +1,4 @@
-import type { ShareKind, ShareMode, LiveShareStatus } from './types';
+import type { LiveShareStatus, ShareKind, ShareMode } from './protocol';
 
 export type { ShareKind, ShareMode, LiveShareStatus };
 

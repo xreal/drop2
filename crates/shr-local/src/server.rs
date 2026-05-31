@@ -9,7 +9,6 @@ use axum::{Json, Router};
 use shr_crypto::{EphemeralKeyPair, Pin, ShareId};
 use shr_protocol::{JoinRequest, JoinResponse, LocalShareInfo, ShareKind};
 use shr_transfer::{ByteSource, FileSource, FolderZipSource, InputKind, ShareInput};
-use tower_http::cors::CorsLayer;
 
 use crate::assets::{index_html, ReceiverAssets};
 use crate::error::LocalError;
@@ -117,7 +116,6 @@ fn build_router(state: AppState) -> Router {
         .route("/api/info", get(api_info))
         .route("/api/join", post(api_join))
         .route("/api/stream", get(api_stream))
-        .layer(CorsLayer::permissive())
         .with_state(state)
 }
 

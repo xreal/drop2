@@ -5,6 +5,10 @@ use walkdir::WalkDir;
 
 use crate::error::TransferError;
 
+const ZIP_U16_MAX: usize = u16::MAX as usize;
+const ZIP_U32_MAX: u64 = u32::MAX as u64;
+const ZIP_MAX_ENTRIES: usize = u16::MAX as usize;
+
 /// Streaming ZIP writer using the STORE method (no compression, no seek).
 pub struct StoreZipWriter<W: Write> {
     inner: W,
@@ -43,8 +47,11 @@ impl<W: Write> StoreZipWriter<W> {
 
     fn add_entry(&mut self, name: &str, data: &[u8], is_dir: bool) -> Result<(), TransferError> {
         let name_bytes = name.as_bytes().to_vec();
+        ensure_name_fits(&name_bytes)?;
+        ensure_entry_count_fits(self.entries.len() + 1)?;
         let crc = crc32fast::hash(data);
-        let size = data.len() as u32;
+        let size = u32::try_from(data.len())
+            .map_err(|_| TransferError::ArchiveLimit("file exceeds 4 GiB Zip32 limit"))?;
         let local_header_offset = self.offset;
 
         write_local_header(&mut self.inner, &name_bytes, crc, size, is_dir)?;
@@ -52,9 +59,11 @@ impl<W: Write> StoreZipWriter<W> {
             self.inner.write_all(data)?;
         }
 
-        self.offset = self
-            .offset
-            .saturating_add(30 + name_bytes.len() as u32 + size);
+        self.offset = checked_add_offset(
+            self.offset,
+            30u64 + name_bytes.len() as u64 + u64::from(size),
+            "archive exceeds 4 GiB Zip32 offset limit",
+        )?;
 
         self.entries.push(CdEntry {
             name: name_bytes,
@@ -68,12 +77,15 @@ impl<W: Write> StoreZipWriter<W> {
     pub fn finish(mut self) -> Result<W, TransferError> {
         let cd_start = self.offset;
         let mut cd_size = 0u32;
+        ensure_entry_count_fits(self.entries.len())?;
 
         for entry in &self.entries {
-            cd_size = cd_size.saturating_add(write_central_directory(
-                &mut self.inner,
-                entry,
-            )?);
+            let entry_size = write_central_directory(&mut self.inner, entry)?;
+            cd_size = checked_add_offset(
+                cd_size,
+                u64::from(entry_size),
+                "central directory exceeds 4 GiB Zip32 limit",
+            )?;
         }
 
         write_end_record(&mut self.inner, self.entries.len() as u16, cd_size, cd_start)?;
@@ -166,6 +178,38 @@ fn write_end_record(
     Ok(())
 }
 
+fn ensure_name_fits(name: &[u8]) -> Result<(), TransferError> {
+    if name.len() > ZIP_U16_MAX {
+        return Err(TransferError::ArchiveLimit(
+            "entry name exceeds 65535-byte Zip32 limit",
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_entry_count_fits(entries: usize) -> Result<(), TransferError> {
+    if entries > ZIP_MAX_ENTRIES {
+        return Err(TransferError::ArchiveLimit(
+            "entry count exceeds 65535 Zip32 limit",
+        ));
+    }
+    Ok(())
+}
+
+fn checked_add_offset(
+    current: u32,
+    add: u64,
+    message: &'static str,
+) -> Result<u32, TransferError> {
+    let next = u64::from(current)
+        .checked_add(add)
+        .ok_or(TransferError::ArchiveLimit(message))?;
+    if next > ZIP_U32_MAX {
+        return Err(TransferError::ArchiveLimit(message));
+    }
+    Ok(next as u32)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,5 +228,79 @@ mod tests {
         let cursor = std::io::Cursor::new(buf);
         let archive = zip::ZipArchive::new(cursor).unwrap();
         assert!(archive.len() >= 3);
+    }
+
+    #[test]
+    fn rejects_entry_names_over_zip32_limit() {
+        let mut zip = StoreZipWriter::new(Vec::new());
+        let name = "a".repeat((u16::MAX as usize) + 1);
+
+        let err = zip.add_file(&name, b"x").unwrap_err();
+
+        assert!(matches!(
+            err,
+            TransferError::ArchiveLimit("entry name exceeds 65535-byte Zip32 limit")
+        ));
+    }
+
+    #[test]
+    fn rejects_more_than_zip32_entry_limit() {
+        let mut zip = StoreZipWriter::new(Vec::new());
+        for index in 0..(u16::MAX as usize) {
+            zip.add_file(&format!("f{index}"), b"x").unwrap();
+        }
+
+        let err = zip.add_file("overflow", b"x").unwrap_err();
+
+        assert!(matches!(
+            err,
+            TransferError::ArchiveLimit("entry count exceeds 65535 Zip32 limit")
+        ));
+    }
+
+    #[test]
+    fn rejects_archive_growth_past_zip32_limit() {
+        let mut zip = StoreZipWriter {
+            inner: Vec::new(),
+            entries: Vec::new(),
+            offset: u32::MAX,
+        };
+
+        let err = zip.add_file("x", b"y").unwrap_err();
+
+        assert!(matches!(
+            err,
+            TransferError::ArchiveLimit("archive exceeds 4 GiB Zip32 offset limit")
+        ));
+    }
+
+    #[test]
+    fn checked_add_offset_rejects_archive_growth_over_limit() {
+        let err = checked_add_offset(
+            u32::MAX,
+            1,
+            "archive exceeds 4 GiB Zip32 offset limit",
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            err,
+            TransferError::ArchiveLimit("archive exceeds 4 GiB Zip32 offset limit")
+        ));
+    }
+
+    #[test]
+    fn checked_add_offset_rejects_central_directory_growth_over_limit() {
+        let err = checked_add_offset(
+            u32::MAX,
+            47,
+            "central directory exceeds 4 GiB Zip32 limit",
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            err,
+            TransferError::ArchiveLimit("central directory exceeds 4 GiB Zip32 limit")
+        ));
     }
 }
