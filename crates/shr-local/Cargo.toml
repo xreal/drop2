@@ -4,6 +4,7 @@ description = "Local HTTP server and LAN sharing for shr.rip"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+build = "build.rs"
 
 [dependencies]
 axum.workspace = true
