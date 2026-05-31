@@ -42,6 +42,26 @@ Stored shares default to a five-day retention (`--expires 7d` to change).
 
 ## Install
 
+### One-line installer
+
+Install the latest release binary to `~/.local/bin`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xreal/drop2/main/scripts/install.sh | bash
+```
+
+Install a specific release tag:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xreal/drop2/main/scripts/install.sh | DROP2_VERSION=v0.1.0 bash
+```
+
+Optional install location:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xreal/drop2/main/scripts/install.sh | DROP2_INSTALL_DIR=/usr/local/bin bash
+```
+
 ### Pre-built binaries
 
 Tagged releases publish macOS and Linux binaries on the [GitHub Releases](https://github.com/xreal/drop2/releases) page.

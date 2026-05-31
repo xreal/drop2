@@ -16,6 +16,7 @@ use url::Url;
 
 use crate::api::{cancel_live_share, ApiConfig};
 use crate::error::HostedError;
+use crate::tls::ensure_rustls_provider;
 
 pub struct HostedShareResult {
     pub share_id: ShareId,
@@ -103,6 +104,7 @@ impl HostedSender {
         create: CreateLiveShareResponse,
         pin: Option<Drop2Pin>,
     ) -> Result<HostedShareResult, HostedError> {
+        ensure_rustls_provider();
         let share_id =
             ShareId::parse(&create.share_id).map_err(|_| HostedError::InvalidResponse)?;
 

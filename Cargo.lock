@@ -621,6 +621,7 @@ dependencies = [
  "futures",
  "futures-util",
  "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "thiserror",

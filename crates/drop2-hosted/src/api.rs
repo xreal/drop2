@@ -4,6 +4,7 @@ use drop2_transfer::{InputKind, ShareInput};
 use reqwest::Client;
 
 use crate::error::HostedError;
+use crate::tls::ensure_rustls_provider;
 
 const DEFAULT_API: &str = "https://drop2.app";
 
@@ -15,6 +16,7 @@ pub struct ApiConfig {
 
 impl ApiConfig {
     pub fn new(base_url: impl Into<String>) -> Self {
+        ensure_rustls_provider();
         Self {
             base_url: base_url.into().trim_end_matches('/').to_string(),
             client: Client::builder()
