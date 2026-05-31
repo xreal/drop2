@@ -1,4 +1,4 @@
-use shr_core::{run_local_share, CoreError, ExitCode, LocalShareOptions};
+use shr_core::{run_local_share, ExitCode, LocalShareOptions};
 use shr_crypto::Pin;
 use tokio::signal;
 
@@ -52,7 +52,7 @@ async fn send(cli: Cli, path: std::path::PathBuf) -> i32 {
         name: cli.name,
     };
 
-    let result = match run_local_share(opts).await {
+    let mut result = match run_local_share(opts).await {
         Ok(r) => r,
         Err(err) => {
             eprintln!("error: {err}");
@@ -69,18 +69,16 @@ async fn send(cli: Cli, path: std::path::PathBuf) -> i32 {
         }
     }
 
-    if let Err(err) = wait_for_shutdown().await {
-        eprintln!("error: {err}");
-        return ExitCode::Runtime.as_i32();
+    if wait_for_shutdown().await.is_err() {
+        return ExitCode::Cancelled.as_i32();
     }
+
+    result.handle.stop();
 
     println!("Status: completed");
     ExitCode::Success.as_i32()
 }
 
-async fn wait_for_shutdown() -> Result<(), CoreError> {
-    signal::ctrl_c()
-        .await
-        .map_err(|e| CoreError::Local(shr_local::LocalError::Other(e.into())))?;
-    Ok(())
+async fn wait_for_shutdown() -> Result<(), ()> {
+    signal::ctrl_c().await.map_err(|_| ())
 }

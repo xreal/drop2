@@ -6,10 +6,9 @@ mod key_exchange;
 mod pin;
 mod stream;
 
-pub use aead::{ChunkDecryptor, ChunkEncryptor, CHUNK_PLAINTEXT_SIZE};
+pub use aead::{ChunkDecryptor, ChunkEncryptor, CHUNK_PLAINTEXT_SIZE, FRAME_TAG_SIZE};
 pub use error::CryptoError;
 pub use id::{generate_pin, generate_share_id, ShareId};
-pub use kdf::derive_chunk_key;
 pub use key_exchange::{EphemeralKeyPair, ReceiverEphemeral, SessionKeys};
 pub use pin::Pin;
 pub use stream::{decrypt_frame_stream, encrypt_frame_stream};

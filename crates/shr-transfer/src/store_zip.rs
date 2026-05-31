@@ -81,7 +81,7 @@ impl<W: Write> StoreZipWriter<W> {
     }
 }
 
-pub fn write_folder_zip(root: &Path, mut writer: impl Write) -> Result<u64, TransferError> {
+pub fn write_folder_zip(root: &Path, mut writer: impl Write) -> Result<(), TransferError> {
     let root = root
         .canonicalize()
         .map_err(|e| TransferError::Unreadable(e.to_string()))?;
@@ -112,7 +112,7 @@ pub fn write_folder_zip(root: &Path, mut writer: impl Write) -> Result<u64, Tran
     }
 
     zip.finish()?;
-    Ok(0)
+    Ok(())
 }
 
 fn write_local_header(

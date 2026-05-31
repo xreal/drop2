@@ -124,7 +124,7 @@ impl SessionState {
 
         let byte_stream = source.into_byte_stream().map(|chunk| {
             chunk
-                .map(|data| Bytes::from(data))
+                .map(Bytes::from)
                 .map_err(|e| std::io::Error::other(e.to_string()))
         });
         let byte_stream: Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>> =

@@ -6,12 +6,10 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-anyhow.workspace = true
 axum.workspace = true
 base64.workspace = true
 bytes.workspace = true
 futures = "0.3"
-http.workspace = true
 local-ip-address.workspace = true
 mime_guess = "2.0"
 pin-project-lite = "0.2"
@@ -25,7 +23,6 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["net", "sync"] }
 tokio-util = { workspace = true, features = ["io"] }
 tower-http = { workspace = true, features = ["cors"] }
-tracing = "0.1"
 uuid = { version = "1.17", features = ["v4"] }
 zeroize.workspace = true
 

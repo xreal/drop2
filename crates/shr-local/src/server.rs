@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
 use axum::extract::{Path as AxumPath, State};
@@ -28,12 +28,14 @@ pub struct LocalUrls {
 
 pub struct LocalServerHandle {
     pub urls: LocalUrls,
-    shutdown: tokio::sync::oneshot::Sender<()>,
+    shutdown: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 impl LocalServerHandle {
-    pub async fn wait_until_done(self) {
-        let _ = self.shutdown.send(());
+    pub fn stop(&mut self) {
+        if let Some(tx) = self.shutdown.take() {
+            let _ = tx.send(());
+        }
     }
 }
 
@@ -76,15 +78,12 @@ impl LocalServer {
             source,
         ));
 
-        let bind_addr: SocketAddr = "0.0.0.0:0".parse().unwrap();
-        let listener = tokio::net::TcpListener::bind(bind_addr)
+        let listener = tokio::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0))
             .await
             .map_err(|_| LocalError::ServerStart)?;
         let actual = listener.local_addr().map_err(|_| LocalError::ServerStart)?;
 
-        let lan_ip = local_ip_address::local_ip().unwrap_or(std::net::IpAddr::V4(
-            std::net::Ipv4Addr::LOCALHOST,
-        ));
+        let lan_ip = local_ip_address::local_ip().unwrap_or(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST));
         let lan_addr = SocketAddr::new(lan_ip, actual.port());
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
@@ -93,16 +92,11 @@ impl LocalServer {
         });
 
         tokio::spawn(async move {
-            let shutdown = async {
-                let _ = shutdown_rx.await;
-            };
-            if axum::serve(listener, app)
-                .with_graceful_shutdown(shutdown)
-                .await
-                .is_err()
-            {
-                tracing::warn!("local server stopped with error");
-            }
+            let _ = axum::serve(listener, app)
+                .with_graceful_shutdown(async {
+                    let _ = shutdown_rx.await;
+                })
+                .await;
         });
 
         Ok(LocalServerHandle {
@@ -111,7 +105,7 @@ impl LocalServer {
                 bind_addr: actual,
                 lan_addr,
             },
-            shutdown: shutdown_tx,
+            shutdown: Some(shutdown_tx),
         })
     }
 }

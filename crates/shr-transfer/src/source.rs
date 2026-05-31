@@ -2,7 +2,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use async_trait::async_trait;
-use futures::Stream;
+use futures::{Stream, StreamExt};
 use pin_project_lite::pin_project;
 use tokio::fs::File;
 use tokio::io::{AsyncRead, BufReader, ReadBuf};
@@ -186,11 +186,11 @@ impl ByteSource for FolderZipSource {
                 }
             }
 
-            if let Err(e) = join.await {
-                yield Err(TransferError::Unreadable(e.to_string()));
+            match join.await {
+                Ok(Ok(())) => {}
+                Ok(Err(err)) => yield Err(err),
+                Err(err) => yield Err(TransferError::Unreadable(err.to_string())),
             }
         })
     }
 }
-
-use futures::StreamExt;

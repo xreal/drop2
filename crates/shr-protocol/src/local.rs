@@ -36,8 +36,3 @@ pub struct JoinResponse {
     pub server_public_key: String,
     pub join_token: String,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StreamComplete {
-    pub bytes_sent: u64,
-}

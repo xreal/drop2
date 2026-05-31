@@ -31,10 +31,8 @@ impl EphemeralKeyPair {
 }
 
 /// Receiver-side ephemeral key for completing the handshake (CLI receive).
-#[allow(dead_code)]
 pub struct ReceiverEphemeral(EphemeralSecret);
 
-#[allow(dead_code)]
 impl ReceiverEphemeral {
     pub fn generate() -> (Self, [u8; 32]) {
         let secret = EphemeralSecret::random_from_rng(OsRng);

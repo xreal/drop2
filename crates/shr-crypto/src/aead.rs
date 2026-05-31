@@ -6,8 +6,8 @@ use crate::error::CryptoError;
 use crate::kdf::derive_chunk_key;
 
 pub const CHUNK_PLAINTEXT_SIZE: usize = 64 * 1024;
+pub const FRAME_TAG_SIZE: usize = 16;
 const NONCE_SIZE: usize = 24;
-const TAG_SIZE: usize = 16;
 
 /// Encrypt plaintext in fixed-size authenticated chunks.
 pub struct ChunkEncryptor {
@@ -44,14 +44,6 @@ impl ChunkEncryptor {
         frame.extend_from_slice(&ciphertext);
         Ok(frame)
     }
-
-    pub fn finish(self, trailing: &[u8]) -> Result<Vec<u8>, CryptoError> {
-        if trailing.is_empty() {
-            return Ok(Vec::new());
-        }
-        let mut enc = self;
-        enc.encrypt_chunk(trailing)
-    }
 }
 
 /// Decrypt authenticated chunk frames.
@@ -69,14 +61,16 @@ impl ChunkDecryptor {
     }
 
     pub fn decrypt_chunk(&mut self, frame: &[u8]) -> Result<Vec<u8>, CryptoError> {
-        if frame.len() < 4 + TAG_SIZE {
+        if frame.len() < 4 + FRAME_TAG_SIZE {
             return Err(CryptoError::Decrypt);
         }
-        let plain_len = u32::from_le_bytes(frame[..4].try_into().unwrap()) as usize;
-        let ciphertext = &frame[4..];
-        if ciphertext.len() < plain_len + TAG_SIZE {
+        let plain_len = u32::from_le_bytes(frame[..4].try_into().map_err(|_| CryptoError::Decrypt)?)
+            as usize;
+        let frame_len = 4 + plain_len + FRAME_TAG_SIZE;
+        if frame.len() != frame_len {
             return Err(CryptoError::Decrypt);
         }
+        let ciphertext = &frame[4..frame_len];
 
         let chunk_key = derive_chunk_key(&self.content_key, self.next_index);
         let cipher = XChaCha20Poly1305::new(Key::from_slice(&*chunk_key));

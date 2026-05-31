@@ -3,7 +3,6 @@ import { hkdf } from '@noble/hashes/hkdf';
 import { sha256 } from '@noble/hashes/sha256';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha';
 
-const CHUNK_PLAINTEXT_SIZE = 64 * 1024;
 const enc = new TextEncoder();
 
 function b64urlEncode(bytes) {
@@ -115,5 +114,3 @@ function concat(...parts) {
   }
   return out;
 }
-
-export { CHUNK_PLAINTEXT_SIZE };

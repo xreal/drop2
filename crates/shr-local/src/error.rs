@@ -20,8 +20,6 @@ pub enum LocalError {
     Busy,
     #[error(transparent)]
     Transfer(#[from] shr_transfer::TransferError),
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
 }
 
 impl IntoResponse for LocalError {
