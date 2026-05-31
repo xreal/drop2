@@ -1,0 +1,14 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "shr-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-05-31",
+  "assets": {
+    "directory": "../assets/receiver",
+    "binding": "ASSETS"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "LIVE_SHARE", "class_name": "LiveShareDO" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiveShareDO"] }]
+}

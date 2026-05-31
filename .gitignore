@@ -10,4 +10,6 @@ AGENTS.md
 assets/receiver/node_modules/
 assets/receiver/package-lock.json
 assets/receiver/vendor/
+worker/node_modules/
+worker/.wrangler/
 codedb.snapshot
