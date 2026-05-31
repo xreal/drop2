@@ -29,6 +29,10 @@ pub enum CoreError {
     Usage(String),
     #[error("network unavailable for requested mode")]
     NetworkUnavailable,
+    #[error("authentication failed")]
+    AuthFailed,
+    #[error("share expired or unavailable")]
+    ShareExpired,
     #[error("operation cancelled")]
     Cancelled,
     #[error("{0}")]
@@ -49,6 +53,8 @@ impl CoreError {
                 _ => ExitCode::Runtime,
             },
             Self::NetworkUnavailable => ExitCode::Network,
+            Self::AuthFailed => ExitCode::Auth,
+            Self::ShareExpired => ExitCode::Expired,
             Self::Cancelled => ExitCode::Cancelled,
             Self::Runtime(_) => ExitCode::Runtime,
         }

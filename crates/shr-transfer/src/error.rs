@@ -16,4 +16,6 @@ pub enum TransferError {
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Zip(#[from] zip::result::ZipError),
+    #[error("crypto error: {0}")]
+    Crypto(String),
 }

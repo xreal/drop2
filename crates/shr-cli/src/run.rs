@@ -1,8 +1,9 @@
 use std::time::Duration;
 
 use shr_core::{
-    is_hosted_available, parse_duration, print_hosted_share, print_local_share, run_hosted_share,
-    run_local_share, ExitCode, HostedShareOptions, LocalShareOptions,
+    default_stored_expiry, is_hosted_available, parse_duration, print_hosted_share, print_local_share,
+    print_receive, print_stored_share, run_hosted_share, run_local_share, run_receive, run_stored_share,
+    ExitCode, HostedShareOptions, LocalShareOptions, ReceiveOptions, StoredShareOptions,
 };
 use shr_crypto::Pin;
 use tokio::signal;
@@ -17,41 +18,41 @@ pub async fn execute(cli: Cli) -> i32 {
         return ExitCode::Usage.as_i32();
     }
 
-    let path = cli.path.clone();
-    match (&cli.command, path.as_ref()) {
-        (Some(Command::Get { .. }), _) => {
-            eprintln!("error: shr get is not implemented yet (Phase 3)");
-            ExitCode::Usage.as_i32()
+    match &cli.command {
+        Some(Command::Get { url, output, pin, password }) => {
+            if *password {
+                eprintln!("error: --password is not implemented yet");
+                return ExitCode::Usage.as_i32();
+            }
+            receive(url.clone(), pin.clone(), output.clone()).await
         }
-        (None, Some(path)) => send(cli, path.clone()).await,
-        (None, None) => {
-            eprintln!("error: missing path (see shr --help)");
-            ExitCode::Usage.as_i32()
+        None => {
+            let path = match cli.path.clone() {
+                Some(path) => path,
+                None => {
+                    eprintln!("error: missing path (see shr --help)");
+                    return ExitCode::Usage.as_i32();
+                }
+            };
+            send(cli, path).await
         }
     }
 }
 
 async fn send(cli: Cli, path: std::path::PathBuf) -> i32 {
-    if cli.keep {
-        eprintln!("error: stored shares are not implemented yet (Phase 3)");
-        return ExitCode::Usage.as_i32();
-    }
-
     if cli.password {
         eprintln!("error: --password is not implemented yet");
         return ExitCode::Usage.as_i32();
     }
 
-    let pin = match cli.pin.as_deref() {
-        Some(raw) => match Pin::parse(raw) {
-            Ok(pin) => Some(pin),
-            Err(err) => {
-                eprintln!("error: {err}");
-                return ExitCode::Usage.as_i32();
-            }
-        },
-        None => None,
+    let pin = match parse_pin(cli.pin.as_deref()) {
+        Ok(pin) => pin,
+        Err(code) => return code,
     };
+
+    if cli.keep {
+        return send_stored(path, pin, cli.name, cli.expires).await;
+    }
 
     let wait = match cli.wait.as_deref() {
         Some(raw) => match parse_duration(raw) {
@@ -73,6 +74,82 @@ async fn send(cli: Cli, path: std::path::PathBuf) -> i32 {
     } else {
         eprintln!("note: shr.rip unreachable, using local LAN share");
         send_local(path, pin, cli.name, cli.open).await
+    }
+}
+
+async fn send_stored(
+    path: std::path::PathBuf,
+    pin: Option<Pin>,
+    name: Option<String>,
+    expires: Option<String>,
+) -> i32 {
+    let expires = match expires.as_deref() {
+        Some(raw) => match parse_duration(raw) {
+            Ok(d) => d,
+            Err(err) => {
+                eprintln!("error: {err}");
+                return ExitCode::Usage.as_i32();
+            }
+        },
+        None => default_stored_expiry(),
+    };
+
+    let outcome = match run_stored_share(StoredShareOptions {
+        path,
+        pin,
+        name,
+        expires,
+    })
+    .await
+    {
+        Ok(r) => r,
+        Err(err) => {
+            eprintln!("error: {err}");
+            return err.exit_code().as_i32();
+        }
+    };
+
+    print_stored_share(&outcome);
+    ExitCode::Success.as_i32()
+}
+
+async fn receive(
+    url: String,
+    pin: Option<String>,
+    output: Option<std::path::PathBuf>,
+) -> i32 {
+    let pin = match parse_pin(pin.as_deref()) {
+        Ok(pin) => pin,
+        Err(code) => return code,
+    };
+
+    let outcome = match run_receive(ReceiveOptions {
+        url: url.clone(),
+        pin,
+        output,
+    })
+    .await
+    {
+        Ok(r) => r,
+        Err(err) => {
+            eprintln!("error: {err}");
+            return err.exit_code().as_i32();
+        }
+    };
+
+    print_receive(&outcome, &url);
+    ExitCode::Success.as_i32()
+}
+
+fn parse_pin(raw: Option<&str>) -> Result<Option<Pin>, i32> {
+    match raw {
+        Some(value) => Pin::parse(value)
+            .map(Some)
+            .map_err(|err| {
+                eprintln!("error: {err}");
+                ExitCode::Usage.as_i32()
+            }),
+        None => Ok(None),
     }
 }
 

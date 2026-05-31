@@ -10,7 +10,7 @@ const DEFAULT_API: &str = "https://shr.rip";
 #[derive(Clone, Debug)]
 pub struct ApiConfig {
     pub base_url: String,
-    client: Client,
+    pub(crate) client: Client,
 }
 
 impl ApiConfig {

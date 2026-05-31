@@ -36,10 +36,6 @@ where
             buffer: Vec::new(),
         }
     }
-
-    fn chunk_plaintext_size(&self) -> usize {
-        self.encryptor.chunk_plaintext_size()
-    }
 }
 
 impl<S> Stream for EncryptedFrameStream<S>
@@ -52,7 +48,7 @@ where
         let mut this = self.project();
 
         loop {
-            let chunk_size = this.chunk_plaintext_size();
+            let chunk_size = this.encryptor.chunk_plaintext_size();
             if this.buffer.len() >= chunk_size {
                 let chunk: Vec<u8> = this.buffer.drain(..chunk_size).collect();
                 match this.encryptor.encrypt_chunk(&chunk) {
