@@ -81,4 +81,24 @@ mod tests {
         assert_eq!(chunks.len(), 1);
         assert!(!chunks[0].is_empty());
     }
+
+    #[tokio::test]
+    async fn encrypts_large_file_to_multiple_chunks() {
+        use shr_crypto::STORED_CHUNK_PLAINTEXT_SIZE;
+
+        let file = NamedTempFile::new().unwrap();
+        let size = STORED_CHUNK_PLAINTEXT_SIZE as u64 + 4096;
+        let data = vec![0xABu8; size as usize];
+        std::fs::write(file.path(), &data).unwrap();
+
+        let source: Box<dyn ByteSource> = Box::new(FileSource::new(
+            file.path().to_path_buf(),
+            "large.bin".into(),
+            size,
+        ));
+        let dek = Zeroizing::new([2u8; 32]);
+        let chunks = encrypt_source_to_chunks(source, dek).await.unwrap();
+        assert_eq!(chunks.len(), 2);
+        assert!(chunks.iter().all(|c| !c.is_empty()));
+    }
 }

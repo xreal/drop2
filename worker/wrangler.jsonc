@@ -19,5 +19,8 @@
       "migrations_dir": "migrations"
     }
   ],
-  "r2_buckets": [{ "binding": "STORED", "bucket_name": "shr-stored" }]
+  "r2_buckets": [{ "binding": "STORED", "bucket_name": "shr-stored" }],
+  "triggers": {
+    "crons": ["0 * * * *"]
+  }
 }
