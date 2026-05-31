@@ -1,6 +1,16 @@
 import { LiveShareDO } from './live-share-do';
 import type { Env } from './types';
 import { generateShareId, isValidShareId } from './share-id';
+import {
+  accessStoredShare,
+  completeStoredShare,
+  createStoredShare,
+  downloadChunk,
+  downloadManifest,
+  getStoredShareInfo,
+  uploadChunk,
+  uploadManifest,
+} from './stored-share';
 
 export { LiveShareDO };
 
@@ -56,6 +66,57 @@ export default {
     );
     if (liveDelete && request.method === 'DELETE') {
       return cancelLiveShare(liveDelete[1], request, env);
+    }
+
+    if (url.pathname === '/api/v1/stored' && request.method === 'POST') {
+      return handleCreateStored(request, env, url);
+    }
+
+    const storedInfo = url.pathname.match(/^\/api\/v1\/stored\/([A-Za-z0-9]{6})$/);
+    if (storedInfo && request.method === 'GET') {
+      return getStoredShareInfo(env, storedInfo[1]);
+    }
+
+    const storedAccess = url.pathname.match(
+      /^\/api\/v1\/stored\/([A-Za-z0-9]{6})\/access$/,
+    );
+    if (storedAccess && request.method === 'POST') {
+      return accessStoredShare(env, storedAccess[1], request);
+    }
+
+    const storedComplete = url.pathname.match(
+      /^\/api\/v1\/stored\/([A-Za-z0-9]{6})\/complete$/,
+    );
+    if (storedComplete && request.method === 'POST') {
+      return completeStoredShare(env, storedComplete[1], request);
+    }
+
+    const storedManifestPut = url.pathname.match(
+      /^\/api\/v1\/stored\/([A-Za-z0-9]{6})\/manifest$/,
+    );
+    if (storedManifestPut && request.method === 'PUT') {
+      return uploadManifest(env, storedManifestPut[1], request);
+    }
+
+    const storedManifestGet = url.pathname.match(
+      /^\/api\/v1\/stored\/([A-Za-z0-9]{6})\/manifest$/,
+    );
+    if (storedManifestGet && request.method === 'GET') {
+      return downloadManifest(env, storedManifestGet[1], request);
+    }
+
+    const storedChunkPut = url.pathname.match(
+      /^\/api\/v1\/stored\/([A-Za-z0-9]{6})\/chunks\/(\d+)$/,
+    );
+    if (storedChunkPut && request.method === 'PUT') {
+      return uploadChunk(env, storedChunkPut[1], Number(storedChunkPut[2]), request);
+    }
+
+    const storedChunkGet = url.pathname.match(
+      /^\/api\/v1\/stored\/([A-Za-z0-9]{6})\/chunks\/(\d+)$/,
+    );
+    if (storedChunkGet && request.method === 'GET') {
+      return downloadChunk(env, storedChunkGet[1], Number(storedChunkGet[2]), request);
     }
 
     if (url.pathname === '/' && request.method === 'GET') {
@@ -238,6 +299,36 @@ async function cancelLiveShare(
 
 function jsonError(message: string, status: number): Response {
   return Response.json({ error: message }, { status });
+}
+
+async function handleCreateStored(
+  request: Request,
+  env: Env,
+  url: URL,
+): Promise<Response> {
+  let body: Record<string, unknown>;
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return jsonError('invalid request body', 400);
+  }
+
+  return createStoredShare(
+    env,
+    {
+      kind: body.kind as 'file' | 'folder',
+      name: body.name as string,
+      size: body.size as number,
+      expires_seconds: body.expires_seconds as number,
+      pin_salt: body.pin_salt as string,
+      pin_hash: body.pin_hash as string,
+      chunk_count: body.chunk_count as number,
+      chunk_plaintext_size: body.chunk_plaintext_size as number,
+      manifest_ciphertext_bytes: body.manifest_ciphertext_bytes as number,
+      ciphertext_bytes_total: body.ciphertext_bytes_total as number,
+    },
+    url.origin,
+  );
 }
 
 function isNonNegativeSafeInteger(value: unknown): value is number {

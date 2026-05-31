@@ -10,5 +10,14 @@
   "durable_objects": {
     "bindings": [{ "name": "LIVE_SHARE", "class_name": "LiveShareDO" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiveShareDO"] }]
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiveShareDO"] }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "shr-db",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "STORED", "bucket_name": "shr-stored" }]
 }

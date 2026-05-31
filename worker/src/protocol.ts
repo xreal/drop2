@@ -10,6 +10,13 @@ export type LiveShareStatus =
   | 'cancelled'
   | 'failed';
 
+export type StoredShareStatus =
+  | 'uploading'
+  | 'ready'
+  | 'expired'
+  | 'deleted'
+  | 'failed';
+
 export type WsControl =
   | {
       type: 'join_request';

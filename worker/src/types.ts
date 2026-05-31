@@ -5,6 +5,8 @@ export type { ShareKind, ShareMode, LiveShareStatus };
 export interface Env {
   LIVE_SHARE: DurableObjectNamespace;
   ASSETS: Fetcher;
+  DB: D1Database;
+  STORED: R2Bucket;
 }
 
 export interface CreateLiveShareBody {
