@@ -1,4 +1,4 @@
-import { joinAndDownload } from './crypto.js';
+import { detectShareContext, joinAndDownload, loadShareInfo } from './crypto.js';
 
 const statusEl = document.querySelector('#status');
 const metaEl = document.querySelector('#meta');
@@ -7,12 +7,6 @@ const progressEl = document.querySelector('#progress');
 
 function setStatus(text) {
   statusEl.textContent = text;
-}
-
-async function loadInfo() {
-  const res = await fetch('/api/info');
-  if (!res.ok) throw new Error('Could not load share info');
-  return res.json();
 }
 
 function formatBytes(n) {
@@ -24,7 +18,14 @@ function formatBytes(n) {
 
 async function main() {
   try {
-    const info = await loadInfo();
+    const ctx = detectShareContext();
+    const info = await loadShareInfo(ctx);
+
+    if (info.status && info.status !== 'waiting' && info.status !== 'active') {
+      setStatus('This share is no longer available');
+      return;
+    }
+
     metaEl.innerHTML = `
       <dt>Name</dt><dd>${escapeHtml(info.name)}</dd>
       <dt>Size</dt><dd>${formatBytes(info.size)}${info.kind === 'folder' ? ' (folder archive)' : ''}</dd>
@@ -37,7 +38,8 @@ async function main() {
       progressEl.hidden = false;
       try {
         const bytes = await joinAndDownload({
-          pinRequired: info.pin_required,
+          ctx,
+          info,
           onStatus: setStatus,
           onProgress: (received) => {
             progressEl.textContent = `Received ${formatBytes(received)}`;
