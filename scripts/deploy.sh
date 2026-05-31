@@ -114,7 +114,21 @@ apply_migrations() {
 deploy_worker() {
   echo "==> Deploying worker: $WORKER_NAME"
   local out
-  out="$(npm run deploy --prefix "$WORKER" 2>&1)"
+  if ! out="$(npm run deploy --prefix "$WORKER" 2>&1)"; then
+    if [[ -n "$DOMAIN" ]]; then
+      echo "$out"
+      echo "==> Domain route failed; redeploying without custom domain"
+      DOMAIN=""
+      patch_wrangler "$D1_ID"
+      out="$(npm run deploy --prefix "$WORKER" 2>&1)" || {
+        echo "$out" >&2
+        exit 1
+      }
+    else
+      echo "$out" >&2
+      exit 1
+    fi
+  fi
   echo "$out"
   DEPLOY_URL="$(echo "$out" | grep -Eo 'https://[a-zA-Z0-9._-]+\.workers\.dev' | tail -1 || true)"
 }
