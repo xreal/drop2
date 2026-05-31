@@ -6,7 +6,7 @@ import { baseUrl, timed } from './lib.mjs';
 const base = baseUrl();
 
 const checks = [
-  { name: 'receiver page', url: `${base}/s/AAAAAA`, expectStatus: 200, expectBody: 'shr' },
+  { name: 'receiver page', url: `${base}/s/AAAAAA`, expectStatus: 200, expectBody: 'drop2' },
   { name: 'health', url: `${base}/api/v1/health`, expectStatus: 200, expectJson: { ok: true } },
 ];
 

@@ -483,12 +483,12 @@ function chunkName(index: number): string {
 }
 
 function verifyUploadToken(request: Request, row: StoredRow): boolean {
-  const token = request.headers.get('x-shr-upload-token');
+  const token = request.headers.get('x-drop2-upload-token');
   return token !== null && token === row.upload_token && row.upload_token.length > 0;
 }
 
 function verifyDownloadToken(request: Request, row: StoredRow): boolean {
-  const token = request.headers.get('x-shr-download-token');
+  const token = request.headers.get('x-drop2-download-token');
   if (!token || !row.download_token || token !== row.download_token) {
     return false;
   }

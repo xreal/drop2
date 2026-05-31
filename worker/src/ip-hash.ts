@@ -1,4 +1,4 @@
-const IP_HASH_PREFIX = 'shr.v1.ip:';
+const IP_HASH_PREFIX = 'drop2.v1.ip:';
 
 /** Stable keyed hash for IP-derived abuse tracking. */
 export async function hashIp(ip: string): Promise<string> {

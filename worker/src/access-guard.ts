@@ -84,7 +84,7 @@ export async function pruneGlobalIpAbuse(env: AccessGuardEnv): Promise<number> {
 function clientIpFrom(request: Request): string {
   return (
     request.headers.get('cf-connecting-ip') ??
-    request.headers.get('x-shr-ip') ??
+    request.headers.get('x-drop2-ip') ??
     '0.0.0.0'
   );
 }

@@ -1,6 +1,6 @@
 # Security
 
-`shr` is designed so untrusted infrastructure never receives plaintext file contents. This document is the pre-launch security review checklist and vulnerability reporting guide.
+`drop2` is designed so untrusted infrastructure never receives plaintext file contents. This document is the pre-launch security review checklist and vulnerability reporting guide.
 
 ## Threat model summary
 
@@ -79,6 +79,6 @@ We aim to acknowledge reports within 72 hours.
 
 | Variable | Component | Purpose |
 |----------|-----------|---------|
-| `SHR_API_URL` | CLI | Override hosted API base URL |
+| `DROP2_API_URL` | CLI | Override hosted API base URL |
 
 Never commit `.env` files, private keys, or Cloudflare API tokens to the repository.

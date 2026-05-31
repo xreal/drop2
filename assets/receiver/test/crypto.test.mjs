@@ -18,9 +18,9 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 function deriveChunkKey(contentKey, index) {
   const indexBytes = new Uint8Array(8);
   new DataView(indexBytes.buffer).setBigUint64(0, index, true);
-  const info = new Uint8Array(enc.encode('shr.v1.chunk').length + indexBytes.length);
-  info.set(enc.encode('shr.v1.chunk'), 0);
-  info.set(indexBytes, enc.encode('shr.v1.chunk').length);
+  const info = new Uint8Array(enc.encode('drop2.v1.chunk').length + indexBytes.length);
+  info.set(enc.encode('drop2.v1.chunk'), 0);
+  info.set(indexBytes, enc.encode('drop2.v1.chunk').length);
   return hkdf(sha256, contentKey, undefined, info, 32);
 }
 
@@ -43,7 +43,7 @@ function decryptFrames(contentKey, frames) {
     const key = deriveChunkKey(contentKey, chunkIndex);
     const nonce = new Uint8Array(24);
     new DataView(nonce.buffer).setBigUint64(0, chunkIndex, true);
-    const aead = xchacha20poly1305(key, nonce, enc.encode('shr.v1.chunk'));
+    const aead = xchacha20poly1305(key, nonce, enc.encode('drop2.v1.chunk'));
     parts.push(aead.decrypt(ciphertext));
     chunkIndex += 1n;
   }
@@ -74,7 +74,7 @@ test('decrypts rust-generated 778-byte fixture', () => {
 test('aad is passed at cipher construction, not decrypt output', () => {
   const key = new Uint8Array(32).fill(9);
   const nonce = new Uint8Array(24);
-  const aead = xchacha20poly1305(key, nonce, enc.encode('shr.v1.chunk'));
+  const aead = xchacha20poly1305(key, nonce, enc.encode('drop2.v1.chunk'));
   const message = enc.encode('hello');
   const sealed = aead.encrypt(message);
   const opened = aead.decrypt(sealed);

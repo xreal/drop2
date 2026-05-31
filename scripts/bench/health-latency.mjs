@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Measure /api/v1/health latency against SHR_API_URL. */
+/** Measure /api/v1/health latency against DROP2_API_URL. */
 
 import { baseUrl, sampleCount, summarize, printSummary, timed } from './lib.mjs';
 

@@ -1,13 +1,13 @@
-# shr.rip — Release Checklist
+# drop2.app — Release Checklist
 
 Use this checklist before pointing production DNS at the hosted service.
 
 ## 1. Build and test
 
 - [ ] `make check` passes locally and in CI
-- [ ] `make release` produces a working `shr` binary
-- [ ] `shr --local` works end-to-end on LAN (browser receive)
-- [ ] `shr get` works for local, live, and stored shares
+- [ ] `make release` produces a working `drop2` binary
+- [ ] `drop2 --local` works end-to-end on LAN (browser receive)
+- [ ] `drop2 get` works for local, live, and stored shares
 
 ## 2. Cloudflare resources
 
@@ -15,7 +15,7 @@ Create and wire these before first deploy:
 
 | Resource | Wrangler binding | Notes |
 |----------|------------------|-------|
-| Worker | `shr-worker` | API + browser app |
+| Worker | `drop2-worker` | API + browser app |
 | Durable Object | `LIVE_SHARE` | One instance per live share |
 | D1 database | `DB` | Stored-share metadata |
 | R2 bucket | `STORED` | Encrypted ciphertext only |
@@ -31,16 +31,16 @@ One command handles D1/R2 wiring, migrations, asset build, and deploy:
 With custom domain (zone must be on Cloudflare):
 
 ```bash
-./scripts/deploy.sh --domain shr.rip --check
+./scripts/deploy.sh --domain drop2.app --check
 ```
 
 Manual steps if you prefer:
 
 ```bash
 cd worker && npm install
-wrangler d1 create shr-db
-wrangler r2 bucket create shr-stored
-wrangler d1 migrations apply shr-db --remote
+wrangler d1 create drop2-db
+wrangler r2 bucket create drop2-stored
+wrangler d1 migrations apply drop2-db --remote
 npm run deploy
 ```
 
@@ -50,8 +50,8 @@ No Worker secrets are required for the MVP.
 
 ## 3. DNS and domain
 
-- [ ] Domain `shr.rip` (or your domain) is on Cloudflare
-- [ ] Worker route covers `shr.rip/*` (automatic with custom domain in Workers dashboard)
+- [ ] Domain `drop2.app` (or your domain) is on Cloudflare
+- [ ] Worker route covers `drop2.app/*` (automatic with custom domain in Workers dashboard)
 - [ ] TLS is active (Cloudflare proxy or Workers custom domain)
 
 ## 4. Pre-launch benchmarks
@@ -59,7 +59,7 @@ No Worker secrets are required for the MVP.
 Run automated smoke checks against your deployed or local Worker:
 
 ```bash
-export SHR_API_URL=https://shr.rip   # or http://127.0.0.1:8787
+export DROP2_API_URL=https://drop2.app   # or http://127.0.0.1:8787
 make bench
 ```
 
@@ -89,21 +89,21 @@ Critical items:
 ## 6. Post-deploy smoke test
 
 ```bash
-export SHR_API_URL=https://shr.rip
+export DROP2_API_URL=https://drop2.app
 
 # Health
-curl -s "$SHR_API_URL/api/v1/health" | jq .
+curl -s "$DROP2_API_URL/api/v1/health" | jq .
 
 # Live share
-shr test.zip
+drop2 test.zip
 # Open printed link in browser, enter PIN, download
 
 # Stored share
-shr --keep test.zip
+drop2 --keep test.zip
 # Open link with fragment, enter PIN, download
 
 # CLI receive
-shr get '<url>' --pin <pin>
+drop2 get '<url>' --pin <pin>
 ```
 
 ## 7. Release artifacts

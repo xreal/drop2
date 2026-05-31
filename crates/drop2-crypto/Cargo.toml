@@ -1,0 +1,24 @@
+[package]
+name = "drop2-crypto"
+description = "Cryptographic primitives for drop2.app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+base64.workspace = true
+chacha20poly1305.workspace = true
+hkdf.workspace = true
+pbkdf2 = "0.12"
+rand.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+x25519-dalek.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+base64.workspace = true
+hex = "0.4"
+serde_json.workspace = true

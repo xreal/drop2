@@ -483,6 +483,133 @@ dependencies = [
 ]
 
 [[package]]
+name = "drop2-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "drop2-core",
+ "drop2-crypto",
+ "drop2-hosted",
+ "open",
+ "tokio",
+]
+
+[[package]]
+name = "drop2-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "drop2-crypto",
+ "drop2-hosted",
+ "drop2-local",
+ "drop2-protocol",
+ "drop2-transfer",
+ "local-ip-address",
+ "serde",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "drop2-crypto"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "chacha20poly1305",
+ "hex",
+ "hkdf",
+ "pbkdf2",
+ "rand 0.8.6",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "x25519-dalek",
+ "zeroize",
+]
+
+[[package]]
+name = "drop2-hosted"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "bytes",
+ "drop2-crypto",
+ "drop2-protocol",
+ "drop2-transfer",
+ "futures",
+ "futures-util",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-tungstenite",
+ "url",
+ "zeroize",
+]
+
+[[package]]
+name = "drop2-local"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64",
+ "bytes",
+ "drop2-crypto",
+ "drop2-protocol",
+ "drop2-transfer",
+ "futures",
+ "local-ip-address",
+ "mime_guess",
+ "pin-project-lite",
+ "reqwest",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tower-http",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
+name = "drop2-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "drop2-transfer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "bytes",
+ "crc32fast",
+ "drop2-crypto",
+ "futures",
+ "os_pipe",
+ "pin-project-lite",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "walkdir",
+ "zeroize",
+ "zip",
+]
+
+[[package]]
 name = "either"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1751,133 +1878,6 @@ name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
-
-[[package]]
-name = "shr-cli"
-version = "0.1.0"
-dependencies = [
- "clap",
- "open",
- "shr-core",
- "shr-crypto",
- "shr-hosted",
- "tokio",
-]
-
-[[package]]
-name = "shr-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "local-ip-address",
- "serde",
- "shr-crypto",
- "shr-hosted",
- "shr-local",
- "shr-protocol",
- "shr-transfer",
- "tempfile",
- "thiserror",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "shr-crypto"
-version = "0.1.0"
-dependencies = [
- "base64",
- "chacha20poly1305",
- "hex",
- "hkdf",
- "pbkdf2",
- "rand 0.8.6",
- "serde",
- "serde_json",
- "sha2",
- "thiserror",
- "x25519-dalek",
- "zeroize",
-]
-
-[[package]]
-name = "shr-hosted"
-version = "0.1.0"
-dependencies = [
- "base64",
- "bytes",
- "futures",
- "futures-util",
- "reqwest",
- "serde",
- "serde_json",
- "shr-crypto",
- "shr-protocol",
- "shr-transfer",
- "thiserror",
- "tokio",
- "tokio-tungstenite",
- "url",
- "zeroize",
-]
-
-[[package]]
-name = "shr-local"
-version = "0.1.0"
-dependencies = [
- "axum",
- "base64",
- "bytes",
- "futures",
- "local-ip-address",
- "mime_guess",
- "pin-project-lite",
- "reqwest",
- "rust-embed",
- "serde",
- "serde_json",
- "shr-crypto",
- "shr-protocol",
- "shr-transfer",
- "tempfile",
- "thiserror",
- "tokio",
- "tokio-util",
- "tower-http",
- "uuid",
- "zeroize",
-]
-
-[[package]]
-name = "shr-protocol"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "shr-transfer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-stream",
- "async-trait",
- "bytes",
- "crc32fast",
- "futures",
- "os_pipe",
- "pin-project-lite",
- "shr-crypto",
- "tempfile",
- "thiserror",
- "tokio",
- "tokio-util",
- "walkdir",
- "zeroize",
- "zip",
-]
 
 [[package]]
 name = "signal-hook-registry"

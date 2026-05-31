@@ -1,7 +1,7 @@
 .PHONY: all build release install test check clean receiver worker-install worker-typecheck worker-test bench
 
 RECEIVER_DIR := assets/receiver
-CLI_CRATE := crates/shr-cli
+CLI_CRATE := crates/drop2-cli
 WORKER_DIR := worker
 
 all: build

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Full Cloudflare deployment for shr.rip Worker.
+# Full Cloudflare deployment for drop2.app Worker.
 #
 # Usage:
 #   ./scripts/deploy.sh              # deploy to workers.dev
-#   ./scripts/deploy.sh --domain shr.rip   # also attach custom domain
+#   ./scripts/deploy.sh --domain drop2.app   # also attach custom domain
 #   ./scripts/deploy.sh --local      # wrangler dev instead of deploy
 #   ./scripts/deploy.sh --check      # verify health after deploy
 #
@@ -15,9 +15,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORKER="$ROOT/worker"
 WRANGLER="$WORKER/wrangler.jsonc"
 
-D1_NAME="${SHR_D1_NAME:-shr-db}"
-R2_NAME="${SHR_R2_NAME:-shr-stored}"
-WORKER_NAME="${SHR_WORKER_NAME:-shr-worker}"
+D1_NAME="${DROP2_D1_NAME:-drop2-db}"
+R2_NAME="${DROP2_R2_NAME:-drop2-stored}"
+WORKER_NAME="${DROP2_WORKER_NAME:-drop2-worker}"
 DOMAIN=""
 MODE="deploy"
 CHECK=false
@@ -198,8 +198,8 @@ fi
 
 echo ""
 echo "Next steps:"
-echo "  export SHR_API_URL=$BASE"
-echo "  shr test.zip"
+echo "  export DROP2_API_URL=$BASE"
+echo "  drop2 test.zip"
 if [[ -z "$DOMAIN" ]]; then
-  echo "  ./scripts/deploy.sh --domain shr.rip   # when DNS is on Cloudflare"
+  echo "  ./scripts/deploy.sh --domain drop2.app   # when DNS is on Cloudflare"
 fi

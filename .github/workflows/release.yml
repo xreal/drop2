@@ -18,13 +18,13 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: shr-x86_64-unknown-linux-gnu
+            artifact: drop2-x86_64-unknown-linux-gnu
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact: shr-aarch64-apple-darwin
+            artifact: drop2-aarch64-apple-darwin
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact: shr-x86_64-apple-darwin
+            artifact: drop2-x86_64-apple-darwin
 
     steps:
       - uses: actions/checkout@v4
@@ -42,12 +42,12 @@ jobs:
 
       - run: make receiver
 
-      - run: cargo build --release --target ${{ matrix.target }} -p shr-cli
+      - run: cargo build --release --target ${{ matrix.target }} -p drop2-cli
 
       - name: Package binary
         run: |
           mkdir -p dist
-          cp "target/${{ matrix.target }}/release/shr" "dist/${{ matrix.artifact }}"
+          cp "target/${{ matrix.target }}/release/drop2" "dist/${{ matrix.artifact }}"
 
       - uses: actions/upload-artifact@v4
         with:

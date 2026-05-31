@@ -1,5 +1,5 @@
 {
-  "name": "shr-worker",
+  "name": "drop2-worker",
   "private": true,
   "type": "module",
   "scripts": {

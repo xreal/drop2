@@ -25,7 +25,7 @@ function b64urlDecode(str) {
 }
 
 function deriveContentKey(sharedSecret) {
-  return hkdf(sha256, sharedSecret, undefined, enc.encode('shr.v1.content'), 32);
+  return hkdf(sha256, sharedSecret, undefined, enc.encode('drop2.v1.content'), 32);
 }
 
 export function detectShareContext() {
@@ -104,7 +104,7 @@ async function joinLocal({ info, onProgress, onStatus }) {
   const contentKey = deriveContentKey(shared);
 
   const streamRes = await fetch('/api/stream', {
-    headers: { 'x-shr-join-token': join.join_token },
+    headers: { 'x-drop2-join-token': join.join_token },
   });
   if (!streamRes.ok) {
     throw new Error(await streamRes.text());

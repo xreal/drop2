@@ -1,0 +1,36 @@
+[package]
+name = "drop2-local"
+description = "Local HTTP server and LAN sharing for drop2.app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[dependencies]
+axum.workspace = true
+base64.workspace = true
+bytes.workspace = true
+futures = "0.3"
+local-ip-address.workspace = true
+mime_guess = "2.0"
+pin-project-lite = "0.2"
+rust-embed.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+drop2-crypto = { path = "../drop2-crypto" }
+drop2-protocol = { path = "../drop2-protocol" }
+drop2-transfer = { path = "../drop2-transfer" }
+thiserror.workspace = true
+tokio = { workspace = true, features = ["net", "sync"] }
+tokio-util = { workspace = true, features = ["io"] }
+tower-http = { workspace = true, features = ["cors"] }
+uuid = { version = "1.17", features = ["v4"] }
+zeroize.workspace = true
+
+[dev-dependencies]
+base64.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde_json.workspace = true
+drop2-crypto = { path = "../drop2-crypto" }
+tempfile = "3.20"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

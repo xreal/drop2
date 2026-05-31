@@ -21,11 +21,11 @@ function encryptManifest(manifest, capabilityBytes) {
     sha256,
     capabilityBytes,
     undefined,
-    enc.encode('shr.v1.stored.manifest-key'),
+    enc.encode('drop2.v1.stored.manifest-key'),
     32,
   );
   const nonce = crypto.getRandomValues(new Uint8Array(24));
-  const aead = xchacha20poly1305(key, nonce, enc.encode('shr.v1.stored.manifest'));
+  const aead = xchacha20poly1305(key, nonce, enc.encode('drop2.v1.stored.manifest'));
   const plain = enc.encode(JSON.stringify(manifest));
   const body = aead.encrypt(plain);
   const out = new Uint8Array(nonce.length + body.length);

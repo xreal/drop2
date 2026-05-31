@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const base = process.env.SHR_API_URL ?? 'http://127.0.0.1:8787';
+const base = process.env.DROP2_API_URL ?? 'http://127.0.0.1:8787';
 
 console.log(`benchmark target: ${base}\n`);
 

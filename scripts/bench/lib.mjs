@@ -1,12 +1,12 @@
 /** Shared config for pre-launch benchmark scripts. */
 
 export function baseUrl() {
-  const url = (process.env.SHR_API_URL ?? 'http://127.0.0.1:8787').replace(/\/$/, '');
+  const url = (process.env.DROP2_API_URL ?? 'http://127.0.0.1:8787').replace(/\/$/, '');
   return url;
 }
 
 export function sampleCount() {
-  const n = Number(process.env.SHR_BENCH_SAMPLES ?? 10);
+  const n = Number(process.env.DROP2_BENCH_SAMPLES ?? 10);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 10;
 }
 

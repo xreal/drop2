@@ -7,7 +7,7 @@ Automated smoke checks plus manual validation gates before public launch.
 Against a running Worker (`wrangler dev` or production):
 
 ```bash
-export SHR_API_URL=http://127.0.0.1:8787   # or https://shr.rip
+export DROP2_API_URL=http://127.0.0.1:8787   # or https://drop2.app
 make bench
 ```
 
@@ -22,8 +22,8 @@ Environment:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `SHR_API_URL` | `http://127.0.0.1:8787` | Target Worker base URL |
-| `SHR_BENCH_SAMPLES` | `10` | Health latency sample count |
+| `DROP2_API_URL` | `http://127.0.0.1:8787` | Target Worker base URL |
+| `DROP2_BENCH_SAMPLES` | `10` | Health latency sample count |
 
 ### Pass criteria (automated)
 
@@ -38,12 +38,12 @@ These require real file transfers and cannot be fully automated yet.
 ### 1. Durable Object relay throughput
 
 ```bash
-export SHR_API_URL=https://shr.rip
+export DROP2_API_URL=https://drop2.app
 # Create a 50–500 MiB test file
-dd if=/dev/urandom of=/tmp/shr-bench.bin bs=1m count=100
+dd if=/dev/urandom of=/tmp/drop2-bench.bin bs=1m count=100
 
 # Sender
-shr /tmp/shr-bench.bin
+drop2 /tmp/drop2-bench.bin
 
 # Receiver: open link in browser, enter PIN, download
 # Record: time to first byte, total transfer time, any disconnects
@@ -54,8 +54,8 @@ shr /tmp/shr-bench.bin
 ### 2. R2 stored-share chunks
 
 ```bash
-shr --keep /tmp/shr-bench.bin
-# Download via browser and via: shr get '<url>' --pin <pin>
+drop2 --keep /tmp/drop2-bench.bin
+# Download via browser and via: drop2 get '<url>' --pin <pin>
 ```
 
 **Gate:** Multi-chunk upload and download succeed; manifest decrypts; file hash matches.
@@ -75,8 +75,8 @@ From one IP, submit wrong PIN 3 times on the same share.
 ### 5. Local mode isolation
 
 ```bash
-shr --local test.zip
-# Verify browser loads from sender IP, not shr.rip
+drop2 --local test.zip
+# Verify browser loads from sender IP, not drop2.app
 # Disconnect internet; transfer should still work
 ```
 

@@ -1,0 +1,18 @@
+[package]
+name = "drop2-cli"
+description = "drop2.app command-line interface"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "drop2"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+open = "5.3"
+drop2-core = { path = "../drop2-core" }
+drop2-crypto = { path = "../drop2-crypto" }
+drop2-hosted = { path = "../drop2-hosted" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }

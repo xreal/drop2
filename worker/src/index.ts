@@ -24,7 +24,7 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === '/api/v1/health') {
-      return Response.json({ ok: true, service: 'shr.rip' });
+      return Response.json({ ok: true, service: 'drop2.app' });
     }
 
     if (url.pathname.startsWith('/assets/')) {
@@ -123,7 +123,7 @@ export default {
     }
 
     if (url.pathname === '/' && request.method === 'GET') {
-      return new Response('shr.rip', {
+      return new Response('drop2.app', {
         headers: { 'content-type': 'text/plain; charset=utf-8' },
       });
     }
@@ -240,7 +240,7 @@ async function admitReceiver(
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'x-shr-ip': ip,
+        'x-drop2-ip': ip,
       },
       body,
     }),
@@ -293,7 +293,7 @@ async function cancelLiveShare(
   env: Env,
 ): Promise<Response> {
   if (!isValidShareId(shareId)) return jsonError('invalid share id', 400);
-  const token = request.headers.get('x-shr-sender-token');
+  const token = request.headers.get('x-drop2-sender-token');
   if (!token) return jsonError('missing sender token', 401);
 
   const res = await doStub(env, shareId).fetch(

@@ -165,7 +165,7 @@ export class LiveShareDO extends DurableObject<Env> {
     const clientKey = body.client_public_key;
     if (!clientKey) return json({ error: ErrorMsg.INVALID_REQUEST }, 400);
 
-    const ip = request.headers.get('x-shr-ip') ?? 'unknown';
+    const ip = request.headers.get('x-drop2-ip') ?? 'unknown';
     const ipKey = await hashIp(ip);
     const now = Date.now();
     this.pruneAbuseTracking(now);

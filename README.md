@@ -1,23 +1,23 @@
-# shr.rip
+# drop2.app
 
-`shr` is a privacy-first file sharing tool for the terminal.
+`drop2` is a privacy-first file sharing tool for the terminal.
 
 Share a file or folder with one command:
 
 ```bash
-shr test.zip
+drop2 test.zip
 ```
 
-You get a short link like `https://shr.rip/s/gS8M5b`.
-The receiver opens it in the browser or uses `shr get <url>`.
+You get a short link like `https://drop2.app/s/gS8M5b`.
+The receiver opens it in the browser or uses `drop2 get <url>`.
 
 ## Features
 
 - End-to-end encrypted transfers — infrastructure never sees plaintext
-- Local/LAN sharing without internet (`shr --local`)
+- Local/LAN sharing without internet (`drop2 --local`)
 - Internet live shares with a short link and 4-digit PIN
 - Stored shares encrypted before upload, expiring after 5 days by default
-- Browser-first receiving with CLI fallback (`shr get`)
+- Browser-first receiving with CLI fallback (`drop2 get`)
 
 ## Install
 
@@ -27,41 +27,41 @@ Requirements: Rust 1.85+, Node.js 22+ (for building the embedded browser receive
 
 ```bash
 git clone <your-repo-url>
-cd shr.rip
+cd drop2.app
 make install
 ```
 
-This builds the receiver assets, compiles a release binary, and installs `shr` to `~/.cargo/bin`.
+This builds the receiver assets, compiles a release binary, and installs `drop2` to `~/.cargo/bin`.
 
 To build without installing:
 
 ```bash
 make release
-./target/release/shr --help
+./target/release/drop2 --help
 ```
 
 ### Verify
 
 ```bash
-shr --version
-shr --help
+drop2 --version
+drop2 --help
 ```
 
 ## Usage
 
 ```bash
 # Live share (internet if available, else LAN)
-shr test.zip
+drop2 test.zip
 
 # Force local-only sharing
-shr --local photos/
+drop2 --local photos/
 
 # Stored encrypted share (5-day expiry)
-shr --keep backup.tar.zst
+drop2 --keep backup.tar.zst
 
 # Receive a share
-shr get https://shr.rip/s/gS8M5b --pin 4821
-shr get 'https://shr.rip/s/gS8M5b#secret' --output ~/Downloads
+drop2 get https://drop2.app/s/gS8M5b --pin 4821
+drop2 get 'https://drop2.app/s/gS8M5b#secret' --output ~/Downloads
 ```
 
 ### Common flags
@@ -80,13 +80,13 @@ shr get 'https://shr.rip/s/gS8M5b#secret' --output ~/Downloads
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `SHR_API_URL` | `https://shr.rip` | Hosted control plane for internet shares |
+| `DROP2_API_URL` | `https://drop2.app` | Hosted control plane for internet shares |
 
 Point at a local Worker during development:
 
 ```bash
-export SHR_API_URL=http://127.0.0.1:8787
-shr test.zip
+export DROP2_API_URL=http://127.0.0.1:8787
+drop2 test.zip
 ```
 
 ## Development

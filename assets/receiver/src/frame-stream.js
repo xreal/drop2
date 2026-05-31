@@ -32,7 +32,7 @@ export function appendEncryptedFrames(state, bytes, contentKey) {
     const key = deriveChunkKey(contentKey, state.chunkIndex);
     const nonce = new Uint8Array(24);
     new DataView(nonce.buffer).setBigUint64(0, state.chunkIndex, true);
-    const aead = xchacha20poly1305(key, nonce, enc.encode('shr.v1.chunk'));
+    const aead = xchacha20poly1305(key, nonce, enc.encode('drop2.v1.chunk'));
     const plain = aead.decrypt(ciphertext);
     state.plainChunks.push(plain);
     state.chunkIndex += 1n;
@@ -65,7 +65,7 @@ export function finalizeEncryptedFrames(
 function deriveChunkKey(contentKey, index) {
   const indexBytes = new Uint8Array(8);
   new DataView(indexBytes.buffer).setBigUint64(0, index, true);
-  const info = concat(enc.encode('shr.v1.chunk'), indexBytes);
+  const info = concat(enc.encode('drop2.v1.chunk'), indexBytes);
   return hkdf(sha256, contentKey, undefined, info, 32);
 }
 

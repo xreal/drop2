@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
-  "name": "shr-worker",
+  "name": "drop2-worker",
   "main": "src/index.ts",
   "compatibility_date": "2025-05-31",
   "assets": {
@@ -26,7 +26,7 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "shr-db",
+      "database_name": "drop2-db",
       "database_id": "0eef7701-6078-469d-a07a-ce9d09240d41",
       "migrations_dir": "migrations"
     }
@@ -34,7 +34,7 @@
   "r2_buckets": [
     {
       "binding": "STORED",
-      "bucket_name": "shr-stored"
+      "bucket_name": "drop2-stored"
     }
   ],
   "triggers": {
