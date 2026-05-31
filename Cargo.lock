@@ -1779,6 +1779,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "url",
 ]
 
 [[package]]
@@ -1791,6 +1792,7 @@ dependencies = [
  "hkdf",
  "pbkdf2",
  "rand 0.8.6",
+ "serde",
  "serde_json",
  "sha2",
  "thiserror",

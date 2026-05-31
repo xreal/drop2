@@ -12,6 +12,8 @@ pub enum TransferError {
     InvalidKind,
     #[error("zip archive exceeds store-only limits: {0}")]
     ArchiveLimit(&'static str),
+    #[error("internal zip writer thread panicked")]
+    InternalWriterPanic,
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]

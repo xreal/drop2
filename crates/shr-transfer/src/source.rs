@@ -171,7 +171,7 @@ impl ByteSource for FolderZipSource {
 
                 writer_handle
                     .join()
-                    .map_err(|_| TransferError::InvalidKind)??;
+                    .map_err(|_| TransferError::InternalWriterPanic)??;
                 Ok::<(), TransferError>(())
             });
 

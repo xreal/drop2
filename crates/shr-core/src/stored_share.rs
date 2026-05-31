@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::time::Duration;
+use tokio::fs;
 
 use shr_crypto::{generate_pin, CapabilitySecret, Pin};
 use shr_hosted::{api_base_from_env, check_reachable, download_stored_share, upload_stored_share};
@@ -77,7 +78,9 @@ pub async fn run_receive(opts: ReceiveOptions) -> Result<ReceiveOutcome, CoreErr
         .map_err(map_hosted)?;
 
     let output_path = resolve_output_path(&result.display_name, opts.output.as_deref())?;
-    std::fs::write(&output_path, &result.bytes).map_err(|e| CoreError::Runtime(e.to_string()))?;
+    fs::write(&output_path, &result.bytes)
+        .await
+        .map_err(|e| CoreError::Runtime(e.to_string()))?;
 
     Ok(ReceiveOutcome {
         display_name: result.display_name,

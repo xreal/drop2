@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::Path;
 
 use walkdir::WalkDir;
@@ -41,8 +41,30 @@ impl<W: Write> StoreZipWriter<W> {
     }
 
     pub fn add_path(&mut self, archive_name: &str, path: &Path) -> Result<(), TransferError> {
-        let data = std::fs::read(path).map_err(|e| TransferError::Unreadable(e.to_string()))?;
-        self.add_file(archive_name, &data)
+        let name_bytes = archive_name.as_bytes().to_vec();
+        ensure_name_fits(&name_bytes)?;
+        ensure_entry_count_fits(self.entries.len() + 1)?;
+
+        let (crc, size) = crc_and_size(path)?;
+        let local_header_offset = self.offset;
+
+        write_local_header(&mut self.inner, &name_bytes, crc, size, false)?;
+        copy_file_contents(path, &mut self.inner)?;
+
+        self.offset = checked_add_offset(
+            self.offset,
+            30u64 + name_bytes.len() as u64 + u64::from(size),
+            "archive exceeds 4 GiB Zip32 offset limit",
+        )?;
+
+        self.entries.push(CdEntry {
+            name: name_bytes,
+            crc32: crc,
+            size,
+            local_header_offset,
+        });
+
+        Ok(())
     }
 
     fn add_entry(&mut self, name: &str, data: &[u8], is_dir: bool) -> Result<(), TransferError> {
@@ -175,6 +197,40 @@ fn write_end_record(
     tail[12..16].copy_from_slice(&cd_size.to_le_bytes());
     tail[16..20].copy_from_slice(&cd_offset.to_le_bytes());
     writer.write_all(&tail)?;
+    Ok(())
+}
+
+fn crc_and_size(path: &Path) -> Result<(u32, u32), TransferError> {
+    let mut file = std::fs::File::open(path)
+        .map_err(|e| TransferError::Unreadable(e.to_string()))?;
+    let mut hasher = crc32fast::Hasher::new();
+    let mut size = 0u64;
+    let mut buf = [0u8; 64 * 1024];
+
+    loop {
+        let n = file
+            .read(&mut buf)
+            .map_err(|e| TransferError::Unreadable(e.to_string()))?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+        size = size
+            .checked_add(n as u64)
+            .ok_or(TransferError::ArchiveLimit("file exceeds 4 GiB Zip32 limit"))?;
+        if size > ZIP_U32_MAX {
+            return Err(TransferError::ArchiveLimit("file exceeds 4 GiB Zip32 limit"));
+        }
+    }
+
+    Ok((hasher.finalize(), size as u32))
+}
+
+fn copy_file_contents(path: &Path, writer: &mut impl Write) -> Result<(), TransferError> {
+    let mut file = std::fs::File::open(path)
+        .map_err(|e| TransferError::Unreadable(e.to_string()))?;
+    std::io::copy(&mut file, writer)
+        .map_err(|e| TransferError::Unreadable(e.to_string()))?;
     Ok(())
 }
 

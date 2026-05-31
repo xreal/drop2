@@ -9,6 +9,8 @@ use shr_transfer::{encrypt_source_to_chunks, ByteSource, FileSource, FolderZipSo
 use crate::api::ApiConfig;
 use crate::error::HostedError;
 
+const MAX_STORED_PLAINTEXT_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
 pub struct StoredUploadResult {
     pub share_id: ShareId,
     pub share_url: String,
@@ -139,8 +141,12 @@ pub async fn download_stored_share(
     let (manifest, dek) = decrypt_manifest(&manifest_bytes, capability)
         .map_err(|e| HostedError::Session(e.to_string()))?;
 
+    if manifest.plaintext_size > MAX_STORED_PLAINTEXT_BYTES {
+        return Err(HostedError::Session("stored share exceeds maximum supported size".into()));
+    }
+
     let mut decryptor = ChunkDecryptor::new(dek);
-    let mut plaintext = Vec::with_capacity(manifest.plaintext_size as usize);
+    let mut plaintext = Vec::new();
 
     for index in 1..=access.chunk_count {
         let chunk_bytes = fetch_protected(
@@ -296,4 +302,14 @@ fn build_source(input: &ShareInput) -> Result<Box<dyn ByteSource>, HostedError> 
         )),
     };
     Ok(source)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MAX_STORED_PLAINTEXT_BYTES;
+
+    #[test]
+    fn max_stored_plaintext_bytes_is_2gib() {
+        assert_eq!(MAX_STORED_PLAINTEXT_BYTES, 2 * 1024 * 1024 * 1024);
+    }
 }
