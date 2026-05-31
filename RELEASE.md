@@ -41,9 +41,7 @@ Update `worker/wrangler.jsonc` with real `database_id` values before deploying.
 
 ### Secrets and vars
 
-No secrets are required for the MVP Worker itself. Optional tuning:
-
-- Set `IP_HASH_KEY` as a Worker secret if you want stable IP hashing across deploys (see `worker/src/ip-hash.ts`).
+No Worker secrets are required for the MVP.
 
 ## 3. DNS and domain
 

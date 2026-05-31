@@ -80,6 +80,5 @@ We aim to acknowledge reports within 72 hours.
 | Variable | Component | Purpose |
 |----------|-----------|---------|
 | `SHR_API_URL` | CLI | Override hosted API base URL |
-| `IP_HASH_KEY` | Worker | Stable salt for IP hashing (set as Worker secret) |
 
 Never commit `.env` files, private keys, or Cloudflare API tokens to the repository.
