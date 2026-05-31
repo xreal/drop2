@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/app.js --bundle --format=esm --outfile=app.bundle.js --minify",
+    "build": "node scripts/build.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "devDependencies": {

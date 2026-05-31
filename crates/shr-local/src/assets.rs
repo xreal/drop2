@@ -1,7 +1,7 @@
 use rust_embed::RustEmbed;
 
 #[derive(RustEmbed)]
-#[folder = "../../assets/receiver/"]
+#[folder = "../../assets/receiver/dist/"]
 pub struct ReceiverAssets;
 
 pub fn index_html() -> String {

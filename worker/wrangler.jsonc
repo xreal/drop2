@@ -4,7 +4,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2025-05-31",
   "assets": {
-    "directory": "../assets/receiver",
+    "directory": "../assets/receiver/dist",
     "binding": "ASSETS"
   },
   "durable_objects": {
