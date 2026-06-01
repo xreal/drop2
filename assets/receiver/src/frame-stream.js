@@ -42,6 +42,19 @@ export function appendEncryptedFrames(state, bytes, contentKey) {
   return state.receivedBytes;
 }
 
+export function encryptFrame(plaintext, contentKey, index) {
+  const chunkIndex = BigInt(index);
+  const key = deriveChunkKey(contentKey, chunkIndex);
+  const nonce = new Uint8Array(24);
+  new DataView(nonce.buffer).setBigUint64(0, chunkIndex, true);
+  const aead = xchacha20poly1305(key, nonce, enc.encode('drop2.v1.chunk'));
+  const ciphertext = aead.encrypt(plaintext);
+  const out = new Uint8Array(4 + ciphertext.length);
+  new DataView(out.buffer).setUint32(0, plaintext.length, true);
+  out.set(ciphertext, 4);
+  return out;
+}
+
 export function finalizeEncryptedFrames(
   state,
   { expectedBytes, requireTransferComplete = false, transferComplete = true } = {},

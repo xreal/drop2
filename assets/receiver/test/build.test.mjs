@@ -6,7 +6,14 @@ import { fileURLToPath } from 'node:url';
 
 const dist = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 
-const required = ['index.html', 'styles.css', 'app.bundle.js'];
+const required = [
+  'index.html',
+  'styles.css',
+  'app.bundle.js',
+  'send.html',
+  'send.css',
+  'send.bundle.js',
+];
 
 for (const name of required) {
   test(`dist/${name} exists after build`, () => {

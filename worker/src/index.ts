@@ -5,6 +5,7 @@ import { jsonError } from './api-errors';
 import { runCleanup } from './cleanup';
 import {
   accessStoredShare,
+  completeStoredDownload,
   completeStoredShare,
   createStoredShare,
   downloadChunk,
@@ -99,6 +100,13 @@ export default {
       return completeStoredShare(env, storedComplete[1], request);
     }
 
+    const storedDownloadComplete = url.pathname.match(
+      /^\/api\/v1\/stored\/([A-Za-z0-9]{6})\/download-complete$/,
+    );
+    if (storedDownloadComplete && request.method === 'POST') {
+      return completeStoredDownload(env, storedDownloadComplete[1], request);
+    }
+
     const storedManifestPut = url.pathname.match(
       /^\/api\/v1\/stored\/([A-Za-z0-9]{6})\/manifest$/,
     );
@@ -127,10 +135,8 @@ export default {
       return downloadChunk(env, storedChunkGet[1], Number(storedChunkGet[2]), request);
     }
 
-    if (url.pathname === '/' && request.method === 'GET') {
-      return new Response('drop2.app', {
-        headers: { 'content-type': 'text/plain; charset=utf-8' },
-      });
+    if ((url.pathname === '/' || url.pathname === '/send') && request.method === 'GET') {
+      return serveSendShell(env);
     }
 
     return new Response('Not found', { status: 404 });
@@ -152,6 +158,16 @@ async function getUnifiedShareInfo(env: Env, shareId: string): Promise<Response>
   }
 
   return proxyToDo(shareId, env, '/info', new Request('https://do/info'));
+}
+
+async function serveSendShell(env: Env): Promise<Response> {
+  const assetUrl = new URL('/send.html', 'https://assets.local/');
+  const res = await env.ASSETS.fetch(new Request(assetUrl));
+  if (!res.ok) return new Response('Send page unavailable', { status: 503 });
+  const html = await res.text();
+  return new Response(html, {
+    headers: { 'content-type': 'text/html; charset=utf-8' },
+  });
 }
 
 async function serveReceiverShell(env: Env): Promise<Response> {
@@ -343,13 +359,15 @@ async function handleCreateStored(
       kind: body.kind as 'file' | 'folder',
       name: body.name as string,
       size: body.size as number,
-      expires_seconds: body.expires_seconds as number,
+      expires_seconds: body.expires_seconds as number | undefined,
       pin_salt: body.pin_salt as string,
       pin_hash: body.pin_hash as string,
       chunk_count: body.chunk_count as number,
       chunk_plaintext_size: body.chunk_plaintext_size as number,
       manifest_ciphertext_bytes: body.manifest_ciphertext_bytes as number,
       ciphertext_bytes_total: body.ciphertext_bytes_total as number,
+      expiry_mode: body.expiry_mode as string | undefined,
+      max_downloads: body.max_downloads as number | undefined,
     },
     url.origin,
   );

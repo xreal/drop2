@@ -10,7 +10,13 @@ import { mapApiError, UserMsg } from './errors.js';
 
 const enc = new TextEncoder();
 
-function b64urlDecode(str) {
+export function b64urlEncode(bytes) {
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+export function b64urlDecode(str) {
   const pad = str.length % 4 === 0 ? '' : '='.repeat(4 - (str.length % 4));
   const b64 = str.replace(/-/g, '+').replace(/_/g, '/') + pad;
   const bin = atob(b64);
@@ -27,17 +33,32 @@ function deriveManifestKey(capabilityBytes) {
   );
 }
 
+export function generateStoredMaterial() {
+  const capabilityBytes = crypto.getRandomValues(new Uint8Array(32));
+  const dek = crypto.getRandomValues(new Uint8Array(32));
+  return {
+    capabilityBytes,
+    capability: b64urlEncode(capabilityBytes),
+    dek,
+  };
+}
+
 function deriveContentDek(encodedDek) {
   return b64urlDecode(encodedDek);
 }
 
-export function parseCapabilityFragment(fragment) {
+export function parseCapabilityFragment(fragment, expectedLength) {
   if (!fragment) return null;
+  let bytes;
   try {
-    return b64urlDecode(fragment);
+    bytes = b64urlDecode(fragment);
   } catch {
     return null;
   }
+  if (expectedLength !== undefined && bytes.length !== expectedLength) {
+    return null;
+  }
+  return bytes;
 }
 
 export function decryptStoredManifest(ciphertext, capabilityBytes) {
@@ -54,6 +75,18 @@ export function decryptStoredManifest(ciphertext, capabilityBytes) {
     throw new Error('Unsupported manifest version');
   }
   return manifest;
+}
+
+export function encryptStoredManifest(manifest, capabilityBytes) {
+  const key = deriveManifestKey(capabilityBytes);
+  const nonce = crypto.getRandomValues(new Uint8Array(24));
+  const aead = xchacha20poly1305(key, nonce, enc.encode('drop2.v1.stored.manifest'));
+  const plain = enc.encode(JSON.stringify(manifest));
+  const body = aead.encrypt(plain);
+  const out = new Uint8Array(nonce.length + body.length);
+  out.set(nonce, 0);
+  out.set(body, nonce.length);
+  return out;
 }
 
 export async function downloadStoredShare({
@@ -109,7 +142,18 @@ export async function downloadStoredShare({
     onProgress(appendEncryptedFrames(state, chunkBytes, contentKey));
   }
 
-  return finalizeEncryptedFrames(state, {
+  const plaintext = finalizeEncryptedFrames(state, {
     expectedBytes: manifest.plaintext_size,
   });
+
+  fetch(`/api/v1/stored/${shareId}/download-complete`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-drop2-download-token': access.download_token,
+    },
+    body: JSON.stringify({ bytes_received: plaintext.length }),
+  }).catch((err) => console.warn('download-complete failed', err));
+
+  return plaintext;
 }

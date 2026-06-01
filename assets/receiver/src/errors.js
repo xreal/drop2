@@ -6,6 +6,7 @@ export const UserMsg = {
   SHARE_NOT_READY: 'This share is not ready yet',
   PIN_REQUIRED: 'PIN required',
   MISSING_CAPABILITY: 'Missing capability secret — use the full link from the sender',
+  INVALID_CAPABILITY: 'Invalid share link — use the full link from the sender',
   CONNECTION_FAILED: 'Connection failed',
   TRANSFER_INCOMPLETE: 'Transfer incomplete',
   DOWNLOAD_FAILED: 'Download failed',

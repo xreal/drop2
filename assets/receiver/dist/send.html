@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>drop2 — send</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+    <link rel="stylesheet" href="/assets/send.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="brand">
+        <p class="eyebrow">drop2.app</p>
+        <h1>Send file</h1>
+      </header>
+
+      <form id="send-form" class="send-form">
+        <label class="file-card file-picker" for="file-input">
+          <div class="file-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path d="M14 2v6h6M12 18v-6M9 15h6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </div>
+          <div class="file-details">
+            <h2 id="file-name" class="file-name">Choose a file</h2>
+            <p id="file-summary" class="file-meta">Up to 10 MiB anonymously.</p>
+          </div>
+          <input id="file-input" type="file" required class="visually-hidden" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Delete after</span>
+          <select id="expiry-mode" class="control">
+            <option value="after_download">Download</option>
+            <option value="1d">1 day</option>
+            <option value="2d">2 days</option>
+            <option value="1w" selected>1 week</option>
+          </select>
+          <p class="helper">A 4-digit PIN will be generated automatically.</p>
+        </label>
+
+        <p id="status" class="status-message" role="status"></p>
+
+        <div id="progress-wrap" class="progress-wrap" hidden>
+          <div class="progress-track" aria-hidden="true">
+            <div id="progress-fill" class="progress-fill"></div>
+          </div>
+          <p id="progress-label" class="progress-label"></p>
+        </div>
+
+        <button id="send-button" type="submit" class="primary-action">
+          <span id="btn-icon" class="btn-icon" aria-hidden="true"></span>
+          <span id="btn-label">Encrypt and upload</span>
+        </button>
+      </form>
+
+      <section id="success" class="thanks" hidden>
+        <div class="thanks-icon" aria-hidden="true">✓</div>
+        <h2>Share is live</h2>
+        <p>The link contains the decryption capability. Send the PIN separately for an extra access gate.</p>
+
+        <label class="field">
+          <span class="field-label">Share link</span>
+          <div class="copy-row">
+            <input id="share-url" readonly class="control" />
+            <button id="copy-link" type="button" class="secondary-action">Copy</button>
+          </div>
+        </label>
+        <label class="field">
+          <span class="field-label">PIN</span>
+          <div class="copy-row">
+            <input id="pin" readonly class="control" />
+            <button id="copy-pin" type="button" class="secondary-action">Copy</button>
+          </div>
+        </label>
+      </section>
+    </main>
+    <script type="module" src="/assets/send.bundle.js"></script>
+  </body>
+</html>

@@ -167,6 +167,9 @@ pub async fn download_stored_share(
         return Err(HostedError::Session("size mismatch after decrypt".into()));
     }
 
+    let _ =
+        complete_stored_download(config, share_id, &access.download_token, plaintext.len()).await;
+
     Ok(StoredDownloadResult {
         display_name: manifest.display_name,
         bytes: plaintext,
@@ -287,6 +290,28 @@ async fn fetch_protected(
         .await
         .map_err(|e| HostedError::Network(e.to_string()))
         .map(|b| b.to_vec())
+}
+
+async fn complete_stored_download(
+    config: &ApiConfig,
+    share_id: &str,
+    download_token: &str,
+    bytes_received: usize,
+) -> Result<(), HostedError> {
+    config
+        .client
+        .post(config.url(&format!("/api/v1/stored/{share_id}/download-complete")))
+        .header("x-drop2-download-token", download_token)
+        .json(&serde_json::json!({ "bytes_received": bytes_received }))
+        .send()
+        .await
+        .map_err(|e| HostedError::Network(e.to_string()))?
+        .error_for_status()
+        .map_err(|e| HostedError::Api {
+            status: e.status().map(|s| s.as_u16()).unwrap_or(500),
+            message: e.to_string(),
+        })?;
+    Ok(())
 }
 
 fn build_source(input: &ShareInput) -> Result<Box<dyn ByteSource>, HostedError> {

@@ -5,7 +5,8 @@
   "compatibility_date": "2025-05-31",
   "assets": {
     "directory": "../assets/receiver/dist",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    "run_worker_first": true
   },
   "durable_objects": {
     "bindings": [

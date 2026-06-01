@@ -25,11 +25,13 @@ import {
   MAX_CHUNK_PLAINTEXT_BYTES,
   validateReadyTotals,
 } from './stored-limits';
+import { resolveExpiry } from './stored-expiry';
 
 const COOLDOWN_MS = 15 * 60 * 1000;
 const MAX_PIN_FAILURES = 3;
 const DOWNLOAD_TOKEN_TTL_MS = 10 * 60 * 1000;
-const MAX_EXPIRES_SECONDS = 30 * 24 * 60 * 60;
+const BROWSER_ANON_MAX_PLAINTEXT_BYTES = 10 * 1024 * 1024;
+const DEFAULT_MAX_DOWNLOADS = 20;
 
 export interface StoredShareEnv extends AccessGuardEnv {
   DB: D1Database;
@@ -59,19 +61,24 @@ interface StoredRow {
   cooldown_until: string;
   download_count: number;
   last_access_at: number | null;
+  expiry_mode: string;
+  max_downloads: number;
+  delete_after_complete: number;
 }
 
 export interface CreateStoredBody {
   kind: ShareKind;
   name: string;
   size: number;
-  expires_seconds: number;
+  expires_seconds?: number;
   pin_salt: string;
   pin_hash: string;
   chunk_count: number;
   chunk_plaintext_size: number;
   manifest_ciphertext_bytes: number;
   ciphertext_bytes_total: number;
+  expiry_mode?: string;
+  max_downloads?: number;
 }
 
 export async function createStoredShare(
@@ -87,9 +94,6 @@ export async function createStoredShare(
   }
   if (!isNonNegativeSafeInteger(body.size)) {
     return jsonError('invalid size', 400);
-  }
-  if (!isExpiresSeconds(body.expires_seconds)) {
-    return jsonError('invalid expiry', 400);
   }
   if (
     typeof body.pin_salt !== 'string' ||
@@ -127,11 +131,33 @@ export async function createStoredShare(
     return jsonError('invalid ciphertext total', 400);
   }
 
+  const expiry = resolveExpiry(body);
+  if (!expiry) {
+    return jsonError('invalid expiry', 400);
+  }
+  const maxDownloads = body.max_downloads ?? DEFAULT_MAX_DOWNLOADS;
+  if (
+    !Number.isInteger(maxDownloads) ||
+    maxDownloads < 1 ||
+    maxDownloads > DEFAULT_MAX_DOWNLOADS
+  ) {
+    return jsonError('invalid max downloads', 400);
+  }
+  if (isBrowserSend(body) && body.size > BROWSER_ANON_MAX_PLAINTEXT_BYTES) {
+    return Response.json({
+      error: 'auth_required',
+      message: 'Sign in to share files this large on drop2.app',
+      limits: {
+        max_anonymous_browser_send_bytes: BROWSER_ANON_MAX_PLAINTEXT_BYTES,
+      },
+    }, { status: 403 });
+  }
+
   const shareId = generateShareId();
   const storagePrefix = crypto.randomUUID();
   const uploadToken = crypto.randomUUID();
   const now = Date.now();
-  const expiresAt = now + body.expires_seconds * 1000;
+  const expiresAt = now + expiry.expiresSeconds * 1000;
   const manifestKey = objectKey(storagePrefix, 'manifest.enc');
 
   await env.DB.prepare(
@@ -139,8 +165,9 @@ export async function createStoredShare(
       share_id, storage_prefix, state, created_at, expires_at,
       pin_salt, pin_hash, item_kind, display_name, plaintext_size,
       manifest_object_key, chunk_count, chunk_plaintext_size,
-      manifest_ciphertext_bytes, ciphertext_bytes_total, upload_token
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      manifest_ciphertext_bytes, ciphertext_bytes_total, upload_token,
+      expiry_mode, max_downloads, delete_after_complete
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       shareId,
@@ -159,6 +186,9 @@ export async function createStoredShare(
       body.manifest_ciphertext_bytes,
       body.ciphertext_bytes_total,
       uploadToken,
+      expiry.mode,
+      maxDownloads,
+      expiry.deleteAfterComplete ? 1 : 0,
     )
     .run();
 
@@ -190,6 +220,8 @@ export async function getStoredShareInfo(
     pin_required: pinRequired(row.pin_hash),
     status: publicStatus(row),
     expires_at: row.expires_at,
+    expiry_mode: row.expiry_mode,
+    downloads_remaining: Math.max(0, row.max_downloads - row.download_count),
   });
 }
 
@@ -203,6 +235,11 @@ export async function accessStoredShare(
   if (isExpired(row)) return shareExpired();
   if (row.state !== 'ready') {
     return shareNotReady();
+  }
+  if (row.download_count >= row.max_downloads) {
+    return jsonError('download limit reached', 403, {
+      code: 'download_limit_reached',
+    });
   }
 
   if (await globalIpBlocked(env, request)) {
@@ -280,6 +317,50 @@ export async function accessStoredShare(
     chunk_count: row.chunk_count,
     status: 'ready',
   });
+}
+
+export async function completeStoredDownload(
+  env: StoredShareEnv,
+  shareId: string,
+  request: Request,
+): Promise<Response> {
+  const row = await fetchRow(env, shareId);
+  if (!row) return shareUnavailable();
+  if (isExpired(row)) return shareExpired();
+  if (row.state === 'deleted') {
+    return Response.json({ ok: true });
+  }
+  if (row.state !== 'ready') return shareNotReady();
+  if (!verifyDownloadToken(request, row)) {
+    return unauthorized();
+  }
+
+  let body: { bytes_received?: number } = {};
+  try {
+    body = await request.json();
+  } catch {
+    body = {};
+  }
+  if (
+    typeof body.bytes_received === 'number' &&
+    Number.isSafeInteger(body.bytes_received) &&
+    body.bytes_received !== row.plaintext_size
+  ) {
+    return jsonError('download size mismatch', 400);
+  }
+
+  if (row.delete_after_complete === 1) {
+    await env.DB.prepare(
+      `UPDATE stored_shares
+       SET state = 'deleted', download_token = NULL, download_token_expires_at = NULL
+       WHERE share_id = ?`,
+    )
+      .bind(shareId)
+      .run();
+    await deleteStoredObjects(env, row);
+  }
+
+  return Response.json({ ok: true });
 }
 
 export async function uploadManifest(
@@ -506,8 +587,20 @@ function publicStatus(row: StoredRow): StoredShareStatus {
   if (isExpired(row)) return 'expired';
   if (row.state === 'ready') return 'ready';
   if (row.state === 'uploading') return 'uploading';
+  if (row.state === 'deleted') return 'deleted';
   if (row.state === 'failed') return 'failed';
   return 'expired';
+}
+
+function isBrowserSend(body: CreateStoredBody): boolean {
+  return body.expiry_mode !== undefined || body.max_downloads !== undefined;
+}
+
+async function deleteStoredObjects(env: StoredShareEnv, row: StoredRow): Promise<void> {
+  await env.STORED.delete(row.manifest_object_key);
+  for (let index = 1; index <= row.chunk_count; index += 1) {
+    await env.STORED.delete(objectKey(row.storage_prefix, chunkName(index)));
+  }
 }
 
 function parseAbuse(row: StoredRow) {
@@ -609,13 +702,4 @@ async function saveAbuse(
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
-}
-
-function isExpiresSeconds(value: unknown): value is number {
-  return (
-    typeof value === 'number' &&
-    Number.isSafeInteger(value) &&
-    value >= 60 &&
-    value <= MAX_EXPIRES_SECONDS
-  );
 }

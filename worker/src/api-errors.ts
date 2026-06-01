@@ -10,8 +10,12 @@ export const ErrorMsg = {
 
 export type ErrorMessage = (typeof ErrorMsg)[keyof typeof ErrorMsg];
 
-export function jsonError(message: string, status: number): Response {
-  return Response.json({ error: message }, { status });
+export function jsonError(
+  message: string,
+  status: number,
+  fields: Record<string, unknown> = {},
+): Response {
+  return Response.json({ ...fields, error: fields.error ?? message }, { status });
 }
 
 export function accessDenied(): Response {

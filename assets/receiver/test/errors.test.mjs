@@ -9,3 +9,8 @@ test('mapApiError maps canonical worker messages', () => {
   assert.equal(mapApiError({ error: 'share unavailable' }), UserMsg.SHARE_UNAVAILABLE);
   assert.equal(mapApiError({}), UserMsg.ACCESS_DENIED);
 });
+
+test('exposes a distinct invalid-capability message', () => {
+  assert.match(UserMsg.INVALID_CAPABILITY, /Invalid share link/);
+  assert.notEqual(UserMsg.INVALID_CAPABILITY, UserMsg.MISSING_CAPABILITY);
+});

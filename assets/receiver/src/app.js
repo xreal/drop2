@@ -180,6 +180,11 @@ async function main() {
         setUiPhase('unavailable');
         return;
       }
+      if (ctx.mode === 'hosted' && ctx.capability && ctx.capability.length !== 32) {
+        setStatus(UserMsg.INVALID_CAPABILITY, 'error');
+        setUiPhase('unavailable');
+        return;
+      }
     } else if (!isLiveDownloadable(info.status) && info.status !== 'active') {
       setStatus(UserMsg.SHARE_UNAVAILABLE, 'error');
       setUiPhase('unavailable');
