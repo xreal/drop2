@@ -73,5 +73,8 @@ pub enum WsControl {
     ReceiverConnected,
     TransferComplete,
     Error { code: String, message: String },
-    State { status: LiveShareStatus },
+    State {
+        status: LiveShareStatus,
+        sender_online: bool,
+    },
 }

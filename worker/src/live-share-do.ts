@@ -39,11 +39,13 @@ interface StoredState {
 
 const COOLDOWN_MS = 15 * 60 * 1000;
 const MAX_PIN_FAILURES = 3;
+const MAX_WATCHERS = 32;
 
 export class LiveShareDO extends DurableObject<Env> {
   private state: StoredState | null = null;
   private senderSocket: WebSocket | null = null;
   private receiverSocket: WebSocket | null = null;
+  private watchSockets = new Set<WebSocket>();
   private senderInboundChain: Promise<void> = Promise.resolve();
   private pendingReceiverBinary: ArrayBuffer[] = [];
   private joinWaiters = new Map<
@@ -217,6 +219,7 @@ export class LiveShareDO extends DurableObject<Env> {
       const serverKey = await this.requestSenderJoin(clientKey, version);
       s.status = 'active';
       await this.persist();
+      this.broadcastState();
       return json({
         server_public_key: serverKey,
         join_token: issued.joinToken,
@@ -237,7 +240,10 @@ export class LiveShareDO extends DurableObject<Env> {
     const url = new URL(request.url);
     const role = url.searchParams.get('role');
     const token = url.searchParams.get('token');
-    if (!role || !token) return json({ error: 'missing role or token' }, 400);
+    if (!role) return json({ error: 'missing role' }, 400);
+    if (role !== 'watch' && !token) {
+      return json({ error: 'missing token' }, 400);
+    }
 
     if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
       return json({ error: 'websocket required' }, 426);
@@ -257,9 +263,20 @@ export class LiveShareDO extends DurableObject<Env> {
       }
       this.senderSocket = server;
       this.attachSender(server);
-      this.sendState(server, s.status);
+      this.sendStateSnapshot(server);
+      this.broadcastState();
+    } else if (role === 'watch') {
+      if (this.watchSockets.size >= MAX_WATCHERS) {
+        server.close(1008, 'too many watchers');
+        return new Response(null, { status: 101, webSocket: client });
+      }
+      this.watchSockets.add(server);
+      this.sendStateSnapshot(server);
+      server.addEventListener('close', () => {
+        this.watchSockets.delete(server);
+      });
     } else if (role === 'receiver') {
-      if (!isJoinTokenValid(token, s.join_token, s.join_token_expires_at, Date.now())) {
+      if (!token || !isJoinTokenValid(token, s.join_token, s.join_token_expires_at, Date.now())) {
         server.close(4401, 'invalid join token');
         return new Response(null, { status: 101, webSocket: client });
       }
@@ -387,6 +404,7 @@ export class LiveShareDO extends DurableObject<Env> {
       clearJoinToken(this.state);
     }
     await this.persist();
+    this.broadcastState();
     await this.ctx.storage.deleteAlarm();
 
     for (const waiter of this.joinWaiters.values()) {
@@ -454,14 +472,33 @@ export class LiveShareDO extends DurableObject<Env> {
     ws.send(JSON.stringify(msg));
   }
 
-  private sendState(ws: WebSocket, status: LiveShareStatus) {
-    this.sendControl(ws, { type: 'state', status });
+  private senderOnline(): boolean {
+    return this.senderSocket?.readyState === WebSocket.OPEN;
+  }
+
+  private stateSnapshot(): WsControl {
+    const status = this.state?.status ?? 'failed';
+    return { type: 'state', status, sender_online: this.senderOnline() };
+  }
+
+  private sendStateSnapshot(ws: WebSocket) {
+    this.sendControl(ws, this.stateSnapshot());
+  }
+
+  private broadcastState() {
+    const msg = this.stateSnapshot();
+    for (const ws of this.watchSockets) {
+      if (ws.readyState === WebSocket.OPEN) {
+        this.sendControl(ws, msg);
+      }
+    }
   }
 
   private async closeShare(status: LiveShareStatus) {
     if (!this.state) return;
     this.state.status = status;
     await this.persist();
+    this.broadcastState();
     await this.ctx.storage.deleteAlarm();
 
     for (const waiter of this.joinWaiters.values()) {
@@ -475,6 +512,10 @@ export class LiveShareDO extends DurableObject<Env> {
     this.senderSocket = null;
     this.receiverSocket = null;
     this.pendingReceiverBinary = [];
+    for (const ws of this.watchSockets) {
+      ws.close(1000, status);
+    }
+    this.watchSockets.clear();
   }
 
   private requireState(): StoredState | { error: Response } {

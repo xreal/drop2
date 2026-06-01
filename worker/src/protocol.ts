@@ -40,4 +40,5 @@ export type WsControl =
   | {
       type: 'state';
       status: LiveShareStatus;
+      sender_online: boolean;
     };

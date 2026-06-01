@@ -9,6 +9,7 @@ use drop2_protocol::{JoinRequest, JoinResponse, LocalShareInfo, ShareKind, Share
 use drop2_transfer::{ByteSource, EncryptedFrameStream, FileSource, FolderZipSource, InputKind};
 use futures::{Stream, StreamExt};
 use pin_project_lite::pin_project;
+use tokio::sync::broadcast;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
@@ -30,6 +31,7 @@ pub struct SessionState {
     join: Mutex<Option<ActiveJoin>>,
     active_slot: Arc<Semaphore>,
     events_tx: UnboundedSender<LocalTransferEvent>,
+    watch_tx: broadcast::Sender<String>,
 }
 
 struct ActiveJoin {
@@ -45,6 +47,7 @@ pin_project! {
         inner: S,
         _permit: OwnedSemaphorePermit,
         events_tx: UnboundedSender<LocalTransferEvent>,
+        watch_tx: broadcast::Sender<String>,
         completed_sent: bool,
     }
 }
@@ -54,11 +57,13 @@ impl<S> ActiveStream<S> {
         inner: S,
         permit: OwnedSemaphorePermit,
         events_tx: UnboundedSender<LocalTransferEvent>,
+        watch_tx: broadcast::Sender<String>,
     ) -> Self {
         Self {
             inner,
             _permit: permit,
             events_tx,
+            watch_tx,
             completed_sent: false,
         }
     }
@@ -79,6 +84,12 @@ where
             std::task::Poll::Ready(None) => {
                 if !*this.completed_sent {
                     let _ = this.events_tx.send(LocalTransferEvent::DownloadCompleted);
+                    let payload = serde_json::json!({
+                        "type": "state",
+                        "status": "waiting",
+                        "sender_online": true,
+                    });
+                    let _ = this.watch_tx.send(payload.to_string());
                     *this.completed_sent = true;
                 }
                 std::task::Poll::Ready(None)
@@ -101,6 +112,7 @@ impl SessionState {
         source_size: u64,
         events_tx: UnboundedSender<LocalTransferEvent>,
     ) -> Self {
+        let (watch_tx, _) = broadcast::channel(16);
         Self {
             share_id,
             display_name,
@@ -114,7 +126,21 @@ impl SessionState {
             join: Mutex::new(None),
             active_slot: Arc::new(Semaphore::new(1)),
             events_tx,
+            watch_tx,
         }
+    }
+
+    pub fn watch_sender(&self) -> broadcast::Sender<String> {
+        self.watch_tx.clone()
+    }
+
+    fn notify_watchers(&self) {
+        let payload = serde_json::json!({
+            "type": "state",
+            "status": self.info().status,
+            "sender_online": true,
+        });
+        let _ = self.watch_tx.send(payload.to_string());
     }
 
     pub fn info(&self) -> LocalShareInfo {
@@ -165,6 +191,8 @@ impl SessionState {
             content_key: session_keys.content_key.clone(),
         });
 
+        self.notify_watchers();
+
         Ok(JoinResponse {
             server_public_key: URL_SAFE_NO_PAD.encode(self.keypair.public_key_bytes()),
             join_token: token,
@@ -204,6 +232,7 @@ impl SessionState {
             encrypted,
             permit,
             self.events_tx.clone(),
+            self.watch_tx.clone(),
         )))
     }
 

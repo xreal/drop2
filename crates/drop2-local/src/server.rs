@@ -2,11 +2,12 @@ use std::collections::BTreeSet;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
-use axum::extract::{Path as AxumPath, State};
+use axum::extract::{Path as AxumPath, State, WebSocketUpgrade};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use tokio::sync::broadcast::error::RecvError;
 use axum_server::tls_rustls::RustlsConfig;
 use drop2_crypto::{EphemeralKeyPair, Pin, ShareId};
 use drop2_protocol::{JoinRequest, JoinResponse, LocalShareInfo, ShareKind};
@@ -144,6 +145,7 @@ fn build_router(state: AppState) -> Router {
         .route("/", get(serve_index))
         .route("/assets/{*path}", get(serve_asset))
         .route("/api/info", get(api_info))
+        .route("/api/watch", get(api_watch))
         .route("/api/join", post(api_join))
         .route("/api/stream", get(api_stream))
         .with_state(state)
@@ -170,6 +172,53 @@ async fn serve_asset(AxumPath(path): AxumPath<String>) -> impl IntoResponse {
 
 async fn api_info(State(state): State<AppState>) -> Result<Json<LocalShareInfo>, LocalError> {
     Ok(Json(state.inner.info()))
+}
+
+async fn api_watch(
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
+) -> Result<Response, LocalError> {
+    let initial = serde_json::json!({
+        "type": "state",
+        "status": state.inner.info().status,
+        "sender_online": true,
+    });
+    let mut watch_rx = state.inner.watch_sender().subscribe();
+
+    Ok(ws.on_upgrade(move |mut socket| async move {
+        if socket
+            .send(axum::extract::ws::Message::Text(initial.to_string().into()))
+            .await
+            .is_err()
+        {
+            return;
+        }
+
+        loop {
+            tokio::select! {
+                msg = watch_rx.recv() => {
+                    match msg {
+                        Ok(payload) => {
+                            if socket
+                                .send(axum::extract::ws::Message::Text(payload.into()))
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
+                        Err(RecvError::Lagged(_)) => continue,
+                        Err(_) => break,
+                    }
+                }
+                incoming = socket.recv() => {
+                    if incoming.is_none() || matches!(incoming, Some(Ok(axum::extract::ws::Message::Close(_)))) {
+                        break;
+                    }
+                }
+            }
+        }
+    }))
 }
 
 async fn api_join(
