@@ -39,13 +39,9 @@ export function detectShareContext() {
 
 export async function loadShareInfo(ctx) {
   if (ctx.mode === 'hosted') {
-    const storedRes = await fetch(`/api/v1/stored/${ctx.shareId}`);
-    if (storedRes.ok) {
-      return storedRes.json();
-    }
-    const liveRes = await fetch(`/api/v1/live/${ctx.shareId}`);
-    if (!liveRes.ok) throw new Error(UserMsg.SHARE_UNAVAILABLE);
-    return liveRes.json();
+    const res = await fetch(`/api/v1/shares/${ctx.shareId}`);
+    if (!res.ok) throw new Error(UserMsg.SHARE_UNAVAILABLE);
+    return res.json();
   }
   const res = await fetch('/api/info');
   if (!res.ok) throw new Error(UserMsg.SHARE_UNAVAILABLE);
@@ -186,7 +182,7 @@ function receiveWebSocket(wsUrl, contentKey, onProgress, expectedBytes) {
         const msg = parseWsControl(event.data);
         if (msg?.type === 'transfer_complete') {
           transferComplete = true;
-          finish();
+          queueMicrotask(() => finish());
         } else if (msg?.type === 'error') {
           settled = true;
           reject(new Error(msg.message || 'Transfer failed'));
@@ -211,7 +207,11 @@ function receiveWebSocket(wsUrl, contentKey, onProgress, expectedBytes) {
     };
     ws.onclose = () => {
       if (!settled) {
-        if (transferComplete) {
+        const receivedExpectedBytes =
+          typeof expectedBytes === 'number' &&
+          Number.isSafeInteger(expectedBytes) &&
+          state.receivedBytes === expectedBytes;
+        if (transferComplete || receivedExpectedBytes) {
           finish();
         } else {
           settled = true;

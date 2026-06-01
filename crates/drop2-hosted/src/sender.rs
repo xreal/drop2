@@ -178,6 +178,7 @@ impl HostedSender {
                                         write.send(Message::Text(done.into())).await
                                             .map_err(|e| HostedError::Network(e.to_string()))?;
                                         let _ = events_tx.send(HostedTransferEvent::DownloadCompleted);
+                                        wait_for_server_release(&mut read).await?;
                                         return Ok(());
                                     }
                                 }
@@ -231,6 +232,20 @@ fn build_source(input: &ShareInput) -> Result<Box<dyn ByteSource>, HostedError> 
         )),
     };
     Ok(source)
+}
+
+/// Stay connected until the relay closes the sender socket after processing
+/// `transfer_complete`, so a client close cannot overtake that control frame.
+async fn wait_for_server_release(
+    read: &mut (impl StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>> + Unpin),
+) -> Result<(), HostedError> {
+    loop {
+        match read.next().await {
+            Some(Ok(Message::Close(_))) | None => return Ok(()),
+            Some(Ok(_)) => {}
+            Some(Err(e)) => return Err(HostedError::Network(e.to_string())),
+        }
+    }
 }
 
 async fn stream_source(

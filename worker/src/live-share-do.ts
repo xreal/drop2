@@ -44,6 +44,8 @@ export class LiveShareDO extends DurableObject<Env> {
   private state: StoredState | null = null;
   private senderSocket: WebSocket | null = null;
   private receiverSocket: WebSocket | null = null;
+  private senderInboundChain: Promise<void> = Promise.resolve();
+  private pendingReceiverBinary: ArrayBuffer[] = [];
   private joinWaiters = new Map<
     number,
     {
@@ -269,6 +271,7 @@ export class LiveShareDO extends DurableObject<Env> {
       await this.persist();
       this.receiverSocket = server;
       this.attachReceiver(server);
+      this.flushPendingReceiverBinary();
       if (this.senderSocket?.readyState === WebSocket.OPEN) {
         this.sendControl(this.senderSocket, { type: 'receiver_connected' });
       }
@@ -308,21 +311,23 @@ export class LiveShareDO extends DurableObject<Env> {
 
   private attachSender(ws: WebSocket) {
     ws.addEventListener('message', (event) => {
-      const data = event.data;
-      if (typeof data === 'string') {
-        this.onSenderControl(data);
-      } else if (data instanceof ArrayBuffer) {
-        this.relayToReceiver(data);
-      }
+      this.enqueueSenderInbound(() => this.handleSenderMessage(event));
     });
     ws.addEventListener('close', () => {
-      if (this.senderSocket === ws) {
-        this.senderSocket = null;
+      if (this.senderSocket !== ws) {
+        return;
+      }
+      this.senderSocket = null;
+      void this.senderInboundChain.then(() => {
         if (this.state && !terminalStatus(this.state.status)) {
           void this.closeShare('failed');
         }
-      }
+      });
     });
+  }
+
+  private enqueueSenderInbound(task: () => Promise<void>): void {
+    this.senderInboundChain = this.senderInboundChain.then(task).catch(() => {});
   }
 
   private attachReceiver(ws: WebSocket) {
@@ -333,7 +338,18 @@ export class LiveShareDO extends DurableObject<Env> {
     });
   }
 
-  private onSenderControl(raw: string) {
+  private async handleSenderMessage(event: MessageEvent): Promise<void> {
+    const data = event.data;
+    if (typeof data === 'string') {
+      await this.onSenderControl(data);
+      return;
+    }
+    if (data instanceof ArrayBuffer) {
+      this.relayToReceiver(data);
+    }
+  }
+
+  private async onSenderControl(raw: string): Promise<void> {
     let msg: WsControl;
     try {
       msg = JSON.parse(raw);
@@ -352,7 +368,7 @@ export class LiveShareDO extends DurableObject<Env> {
     }
 
     if (msg.type === 'transfer_complete') {
-      void this.completeTransfer();
+      await this.completeTransfer();
     }
   }
 
@@ -395,9 +411,23 @@ export class LiveShareDO extends DurableObject<Env> {
   }
 
   private relayToReceiver(data: ArrayBuffer) {
-    if (this.receiverSocket?.readyState === WebSocket.OPEN) {
-      this.receiverSocket.send(data);
+    const receiver = this.receiverSocket;
+    if (!receiver || receiver.readyState !== WebSocket.OPEN) {
+      this.pendingReceiverBinary.push(data);
+      return;
     }
+    receiver.send(data);
+  }
+
+  private flushPendingReceiverBinary(): void {
+    const receiver = this.receiverSocket;
+    if (!receiver || receiver.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    for (const data of this.pendingReceiverBinary) {
+      receiver.send(data);
+    }
+    this.pendingReceiverBinary = [];
   }
 
   private requestSenderJoin(clientKey: string, version: number): Promise<string> {
@@ -444,6 +474,7 @@ export class LiveShareDO extends DurableObject<Env> {
     this.receiverSocket?.close(1000, status);
     this.senderSocket = null;
     this.receiverSocket = null;
+    this.pendingReceiverBinary = [];
   }
 
   private requireState(): StoredState | { error: Response } {

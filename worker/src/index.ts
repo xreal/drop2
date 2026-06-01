@@ -42,6 +42,11 @@ export default {
       return createLiveShare(request, env, url);
     }
 
+    const shareInfo = url.pathname.match(/^\/api\/v1\/shares\/([A-Za-z0-9]{6})$/);
+    if (shareInfo && request.method === 'GET') {
+      return getUnifiedShareInfo(env, shareInfo[1]);
+    }
+
     const liveInfo = url.pathname.match(/^\/api\/v1\/live\/([A-Za-z0-9]{6})$/);
     if (liveInfo && request.method === 'GET') {
       return proxyToDo(liveInfo[1], env, '/info', request);
@@ -135,6 +140,19 @@ export default {
     await runCleanup(env);
   },
 };
+
+async function getUnifiedShareInfo(env: Env, shareId: string): Promise<Response> {
+  if (!isValidShareId(shareId)) {
+    return jsonError('invalid share id', 400);
+  }
+
+  const storedRes = await getStoredShareInfo(env, shareId);
+  if (storedRes.status !== 404) {
+    return storedRes;
+  }
+
+  return proxyToDo(shareId, env, '/info', new Request('https://do/info'));
+}
 
 async function serveReceiverShell(env: Env): Promise<Response> {
   const assetUrl = new URL('/index.html', 'https://assets.local/');
