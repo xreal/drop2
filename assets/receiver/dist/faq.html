@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Frequently asked questions about drop2 — limits, privacy, expiry, and acceptable use."
+    />
+    <title>drop2 — FAQ</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="site-header">
+        <a href="/" class="site-logo" aria-label="drop2 home">
+          <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <rect width="32" height="32" rx="9" fill="currentColor" opacity="0.15" />
+            <path
+              d="M16 7c-4.2 3.2-7 6.8-7 10.5A7 7 0 0 0 16 25a7 7 0 0 0 7-7.5C23 13.8 20.2 10.2 16 7Z"
+              fill="currentColor"
+            />
+            <path
+              d="M16 19v-4M13.5 16.5 16 19l2.5-2.5"
+              stroke="var(--bg)"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <span>drop2</span>
+        </a>
+      </header>
+
+      <div class="page-main">
+        <main class="shell shell--wide">
+          <header class="brand">
+            <h1>FAQ</h1>
+          </header>
+
+          <section class="faq faq--page" aria-label="Frequently asked questions">
+            <details>
+              <summary>What are the size limits?</summary>
+              <p>
+                Browser sends without an account are limited to 10&nbsp;MiB per file. The CLI
+                supports larger files, folders, and live streaming — install with
+                <code>curl -fsSL https://raw.githubusercontent.com/xreal/drop2/main/scripts/install.sh | bash</code>.
+              </p>
+            </details>
+
+            <details>
+              <summary>How long does a link stay available?</summary>
+              <p>
+                You choose when creating a share: delete after the first download, or keep it for
+                up to one week in the browser. Stored shares expire automatically and are removed
+                from storage.
+              </p>
+            </details>
+
+            <details>
+              <summary>Who can read my files?</summary>
+              <p>
+                Only someone with the share link and PIN. Files are encrypted on your device with
+                modern cryptography (X25519 + XChaCha20-Poly1305). drop2 infrastructure stores
+                ciphertext only and cannot decrypt your content.
+              </p>
+            </details>
+
+            <details>
+              <summary>What about misuse or abuse?</summary>
+              <p>
+                drop2 is for legitimate file sharing, not hosting public content. Repeated wrong
+                PIN attempts trigger cooldowns; cross-share probing is rate-limited. We do not
+                inspect file contents, but shares can be removed when they violate acceptable use.
+              </p>
+            </details>
+
+            <details>
+              <summary>Is the PIN enough protection?</summary>
+              <p>
+                The PIN is an access gate on top of encryption — send it separately from the link.
+                For highly sensitive data, treat the link like a secret and prefer short expiry
+                or delete-after-download.
+              </p>
+            </details>
+          </section>
+        </main>
+      </div>
+
+      <footer class="site-footer" aria-label="Footer">
+        <a href="/">Send</a>
+        <a href="https://github.com/xreal/drop2" rel="noopener noreferrer">GitHub</a>
+      </footer>
+    </div>
+  </body>
+</html>

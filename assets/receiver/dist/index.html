@@ -3,59 +3,89 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Download a file shared with drop2 — decrypted securely in your browser." />
     <title>drop2 — receive</title>
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <header class="brand">
-        <p class="eyebrow">drop2.app</p>
-        <h1>Receive file</h1>
-      </header>
-
-      <section class="file-card" aria-labelledby="file-name">
-        <div class="file-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+    <div class="page">
+      <header class="site-header">
+        <a href="/" class="site-logo" aria-label="drop2 home">
+          <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <rect width="32" height="32" rx="9" fill="currentColor" opacity="0.15" />
             <path
-              d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"
+              d="M16 7c-4.2 3.2-7 6.8-7 10.5A7 7 0 0 0 16 25a7 7 0 0 0 7-7.5C23 13.8 20.2 10.2 16 7Z"
+              fill="currentColor"
+            />
+            <path
+              d="M16 19v-4M13.5 16.5 16 19l2.5-2.5"
+              stroke="var(--bg)"
+              stroke-width="1.5"
               stroke-linecap="round"
               stroke-linejoin="round"
             />
-            <path d="M14 2v6h6M12 18v-6M9 15h6" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
-        </div>
-        <div class="file-details">
-          <h2 id="file-name" class="file-name">—</h2>
-          <p id="file-meta" class="file-meta"></p>
-          <dl id="meta" class="meta"></dl>
-        </div>
-      </section>
+          <span>drop2</span>
+        </a>
+      </header>
 
-      <div id="live-pill" class="live-pill" hidden>
-        <span class="pulse" aria-hidden="true"></span>
-        <span>Live share</span>
+      <div class="page-main">
+        <main class="shell">
+          <header class="brand">
+            <h1>Receive file</h1>
+          </header>
+
+          <section class="file-card" aria-labelledby="file-name">
+            <div class="file-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path
+                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <path d="M14 2v6h6M12 18v-6M9 15h6" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <div class="file-details">
+              <h2 id="file-name" class="file-name">—</h2>
+              <p id="file-meta" class="file-meta"></p>
+              <dl id="meta" class="meta"></dl>
+            </div>
+          </section>
+
+          <div id="live-pill" class="live-pill" hidden>
+            <span class="pulse" aria-hidden="true"></span>
+            <span>Live share</span>
+          </div>
+
+          <p id="status" class="status-message" role="status">Loading…</p>
+
+          <div id="progress-wrap" class="progress-wrap" hidden>
+            <div class="progress-track" aria-hidden="true">
+              <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <p id="progress-label" class="progress-label"></p>
+          </div>
+
+          <button id="download" type="button" class="primary-action">
+            <span id="btn-icon" class="btn-icon" aria-hidden="true"></span>
+            <span id="btn-label">Download securely</span>
+          </button>
+
+          <section id="thanks" class="thanks" hidden>
+            <div class="thanks-icon" aria-hidden="true">✓</div>
+            <h2>Thanks for downloading</h2>
+            <p>Your file was decrypted in the browser and saved locally. You can close this tab.</p>
+          </section>
+        </main>
       </div>
 
-      <p id="status" class="status-message" role="status">Loading…</p>
-
-      <div id="progress-wrap" class="progress-wrap" hidden>
-        <div class="progress-track" aria-hidden="true">
-          <div id="progress-fill" class="progress-fill"></div>
-        </div>
-        <p id="progress-label" class="progress-label"></p>
-      </div>
-
-      <button id="download" type="button" class="primary-action">
-        <span id="btn-icon" class="btn-icon" aria-hidden="true"></span>
-        <span id="btn-label">Download securely</span>
-      </button>
-
-      <section id="thanks" class="thanks" hidden>
-        <div class="thanks-icon" aria-hidden="true">✓</div>
-        <h2>Thanks for downloading</h2>
-        <p>Your file was decrypted in the browser and saved locally. You can close this tab.</p>
-      </section>
-    </main>
+      <footer class="site-footer" aria-label="Footer">
+        <a href="/">Send</a>
+        <a href="/faq">FAQ</a>
+        <a href="https://github.com/xreal/drop2" rel="noopener noreferrer">GitHub</a>
+      </footer>
+    </div>
     <script type="module" src="/assets/app.bundle.js"></script>
   </body>
 </html>

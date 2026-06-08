@@ -139,6 +139,10 @@ export default {
       return serveSendShell(env);
     }
 
+    if (url.pathname === '/faq' && request.method === 'GET') {
+      return serveFaqShell(env);
+    }
+
     return new Response('Not found', { status: 404 });
   },
 
@@ -161,9 +165,21 @@ async function getUnifiedShareInfo(env: Env, shareId: string): Promise<Response>
 }
 
 async function serveSendShell(env: Env): Promise<Response> {
-  const assetUrl = new URL('/send.html', 'https://assets.local/');
+  return serveStaticHtml(env, '/send.html', 'Send page unavailable');
+}
+
+async function serveFaqShell(env: Env): Promise<Response> {
+  return serveStaticHtml(env, '/faq.html', 'FAQ page unavailable');
+}
+
+async function serveStaticHtml(
+  env: Env,
+  assetPath: string,
+  unavailableMessage: string,
+): Promise<Response> {
+  const assetUrl = new URL(assetPath, 'https://assets.local/');
   const res = await env.ASSETS.fetch(new Request(assetUrl));
-  if (!res.ok) return new Response('Send page unavailable', { status: 503 });
+  if (!res.ok) return new Response(unavailableMessage, { status: 503 });
   const html = await res.text();
   return new Response(html, {
     headers: { 'content-type': 'text/html; charset=utf-8' },
@@ -171,13 +187,7 @@ async function serveSendShell(env: Env): Promise<Response> {
 }
 
 async function serveReceiverShell(env: Env): Promise<Response> {
-  const assetUrl = new URL('/index.html', 'https://assets.local/');
-  const res = await env.ASSETS.fetch(new Request(assetUrl));
-  if (!res.ok) return new Response('Receiver unavailable', { status: 503 });
-  const html = await res.text();
-  return new Response(html, {
-    headers: { 'content-type': 'text/html; charset=utf-8' },
-  });
+  return serveStaticHtml(env, '/index.html', 'Receiver unavailable');
 }
 
 function doStub(env: Env, shareId: string) {

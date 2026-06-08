@@ -9,6 +9,7 @@ const dist = join(root, 'dist');
 mkdirSync(dist, { recursive: true });
 copyFileSync(join(root, 'index.html'), join(dist, 'index.html'));
 copyFileSync(join(root, 'send.html'), join(dist, 'send.html'));
+copyFileSync(join(root, 'faq.html'), join(dist, 'faq.html'));
 copyFileSync(join(root, 'styles.css'), join(dist, 'styles.css'));
 copyFileSync(join(root, 'send.css'), join(dist, 'send.css'));
 

@@ -11,6 +11,7 @@ const required = [
   'styles.css',
   'app.bundle.js',
   'send.html',
+  'faq.html',
   'send.css',
   'send.bundle.js',
 ];
