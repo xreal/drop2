@@ -9,14 +9,17 @@ import { generatePin, hashPin } from './pin.js';
 export const STORED_CHUNK_PLAINTEXT_SIZE = 8 * 1024 * 1024;
 export const ANONYMOUS_BROWSER_SEND_LIMIT = 10 * 1024 * 1024;
 
-export async function prepareStoredUpload(file, { expiryMode = '1w', onProgress } = {}) {
+export async function prepareStoredUpload(
+  file,
+  { expiryMode = '1w', pinRequired = true, onProgress } = {},
+) {
   if (file.size > ANONYMOUS_BROWSER_SEND_LIMIT) {
     throw new Error('Anonymous browser sends are limited to 10 MiB for now.');
   }
 
   const material = generateStoredMaterial();
-  const pin = generatePin();
-  const pinMaterial = hashPin(pin);
+  const pin = pinRequired ? generatePin() : null;
+  const pinMaterial = pin ? hashPin(pin) : { pin_salt: '', pin_hash: '' };
   const chunks = [];
   let ciphertextBytesTotal = 0;
   let readBytes = 0;

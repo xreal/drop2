@@ -3,94 +3,37 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta
-      name="description"
-      content="Frequently asked questions about drop2 — limits, privacy, expiry, and acceptable use."
-    />
-    <title>drop2 — FAQ</title>
+    <meta name="description" content="Answers about drop2 file limits, privacy, expiry, and secure sharing." />
+    <title>drop2.app — frequently asked questions</title>
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
   <body>
     <div class="page">
       <header class="site-header">
-        <a href="/" class="site-logo" aria-label="drop2 home">
-          <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-            <rect width="32" height="32" rx="9" fill="currentColor" opacity="0.15" />
-            <path
-              d="M16 7c-4.2 3.2-7 6.8-7 10.5A7 7 0 0 0 16 25a7 7 0 0 0 7-7.5C23 13.8 20.2 10.2 16 7Z"
-              fill="currentColor"
-            />
-            <path
-              d="M16 19v-4M13.5 16.5 16 19l2.5-2.5"
-              stroke="var(--bg)"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <span>drop2</span>
-        </a>
+        <div class="header-inner">
+          <a href="/" class="site-logo" aria-label="drop2.app home">
+            <span class="logo-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0L8 8m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg></span>
+            <span>drop2<span>.app</span></span>
+          </a>
+          <nav class="site-nav" aria-label="Main navigation"><a href="/">Send</a><a href="/faq" aria-current="page">FAQ</a><a href="https://github.com/xreal/drop2" rel="noopener noreferrer">GitHub</a></nav>
+        </div>
       </header>
 
       <div class="page-main">
         <main class="shell shell--wide">
-          <header class="brand">
-            <h1>FAQ</h1>
-          </header>
-
-          <section class="faq faq--page" aria-label="Frequently asked questions">
-            <details>
-              <summary>What are the size limits?</summary>
-              <p>
-                Browser sends without an account are limited to 10&nbsp;MiB per file. The CLI
-                supports larger files, folders, and live streaming — install with
-                <code>curl -fsSL https://raw.githubusercontent.com/xreal/drop2/main/scripts/install.sh | bash</code>.
-              </p>
-            </details>
-
-            <details>
-              <summary>How long does a link stay available?</summary>
-              <p>
-                You choose when creating a share: delete after the first download, or keep it for
-                up to one week in the browser. Stored shares expire automatically and are removed
-                from storage.
-              </p>
-            </details>
-
-            <details>
-              <summary>Who can read my files?</summary>
-              <p>
-                Only someone with the share link and PIN. Files are encrypted on your device with
-                modern cryptography (X25519 + XChaCha20-Poly1305). drop2 infrastructure stores
-                ciphertext only and cannot decrypt your content.
-              </p>
-            </details>
-
-            <details>
-              <summary>What about misuse or abuse?</summary>
-              <p>
-                drop2 is for legitimate file sharing, not hosting public content. Repeated wrong
-                PIN attempts trigger cooldowns; cross-share probing is rate-limited. We do not
-                inspect file contents, but shares can be removed when they violate acceptable use.
-              </p>
-            </details>
-
-            <details>
-              <summary>Is the PIN enough protection?</summary>
-              <p>
-                The PIN is an access gate on top of encryption — send it separately from the link.
-                For highly sensitive data, treat the link like a secret and prefer short expiry
-                or delete-after-download.
-              </p>
-            </details>
+          <header class="brand"><p class="eyebrow">Clear by design</p><h1>Frequently asked questions</h1><p>The useful details about limits, expiration, and how your files stay private.</p></header>
+          <section class="faq" aria-label="Frequently asked questions">
+            <details><summary>What are the size limits?</summary><p>Anonymous browser sends are limited to 10&nbsp;MiB per file. The CLI supports larger files, folders, and live streaming. Install it with <code>curl -fsSL https://raw.githubusercontent.com/xreal/drop2/main/scripts/install.sh | bash</code>.</p></details>
+            <details><summary>How long does a link stay available?</summary><p>You choose when creating a share: delete it after the first completed download, or keep it for one day, two days, or one week. Expired shares are removed automatically.</p></details>
+            <details><summary>Who can read my files?</summary><p>Only someone with the complete share link can decrypt a file. If you enable PIN protection, they also need the separately shared PIN. Encryption and decryption happen on your device; drop2 stores ciphertext only.</p></details>
+            <details><summary>Do I need to use a PIN?</summary><p>No. PIN protection is enabled by default but can be turned off under Advanced options. The full link still contains a strong, random decryption capability and should always be treated as a secret.</p></details>
+            <details><summary>What about misuse or abuse?</summary><p>drop2 is for legitimate private file transfer, not public content hosting. Cross-share probing and repeated incorrect PIN attempts are rate-limited. Shares that violate acceptable use can be removed without inspecting their encrypted contents.</p></details>
+            <details><summary>Can I send larger files?</summary><p>Yes. The open-source drop2 CLI sends larger files and folders as live or stored encrypted shares. Browser account tiers and larger uploads are planned but are not available yet.</p></details>
           </section>
         </main>
       </div>
 
-      <footer class="site-footer" aria-label="Footer">
-        <a href="/">Send</a>
-        <a href="https://github.com/xreal/drop2" rel="noopener noreferrer">GitHub</a>
-      </footer>
+      <footer class="site-footer"><p>© 2026 drop2.app — made for sending files, not storing them.</p><nav aria-label="Footer navigation"><a href="/">Send</a><a href="/faq">FAQ</a><a href="https://github.com/xreal/drop2" rel="noopener noreferrer">GitHub</a></nav></footer>
     </div>
   </body>
 </html>
