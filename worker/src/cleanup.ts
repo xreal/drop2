@@ -13,7 +13,7 @@ interface ExpiredRow {
   state: string;
 }
 
-/** Hourly cleanup: expire stale uploads, delete R2 objects, prune abuse rows. */
+/** Scheduled cleanup: expire stale uploads, delete R2 objects, prune abuse rows. */
 export async function runCleanup(env: CleanupEnv): Promise<void> {
   await expireStaleUploads(env);
   await deleteExpiredStoredObjects(env);
@@ -36,7 +36,7 @@ async function deleteExpiredStoredObjects(env: CleanupEnv): Promise<void> {
   const { results } = await env.DB.prepare(
     `SELECT share_id, storage_prefix, state
      FROM stored_shares
-     WHERE expires_at <= ? AND state != 'deleted'`,
+     WHERE (expires_at <= ? OR state = 'deleting') AND state != 'deleted'`,
   )
     .bind(now)
     .all<ExpiredRow>();

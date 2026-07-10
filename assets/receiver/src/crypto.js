@@ -50,7 +50,7 @@ export async function loadShareInfo(ctx) {
 
 export async function joinAndDownload({ ctx, info, onProgress, onStatus }) {
   if (info.mode === 'stored') {
-    if (!ctx.capability) {
+    if (info.encryption_mode !== 'none' && !ctx.capability) {
       throw new Error('Missing capability secret in URL');
     }
     return downloadStoredShare({
@@ -63,9 +63,15 @@ export async function joinAndDownload({ ctx, info, onProgress, onStatus }) {
   }
 
   if (ctx.mode === 'hosted') {
-    return joinHosted({ ctx, info, onProgress, onStatus });
+    return {
+      bytes: await joinHosted({ ctx, info, onProgress, onStatus }),
+      complete: null,
+    };
   }
-  return joinLocal({ info, onProgress, onStatus });
+  return {
+    bytes: await joinLocal({ info, onProgress, onStatus }),
+    complete: null,
+  };
 }
 
 async function joinLocal({ info, onProgress, onStatus }) {

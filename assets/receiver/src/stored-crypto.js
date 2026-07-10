@@ -96,6 +96,7 @@ export async function downloadStoredShare({
   onProgress,
   onStatus,
 }) {
+  const encrypted = info.encryption_mode !== 'none';
   onStatus('Verifying access…');
 
   const accessBody = {};
@@ -116,7 +117,7 @@ export async function downloadStoredShare({
   }
   const access = await accessRes.json();
 
-  onStatus('Fetching encrypted manifest…');
+  onStatus(encrypted ? 'Fetching encrypted manifest…' : 'Fetching file details…');
 
   const manifestRes = await fetch(`/api/v1/stored/${shareId}/manifest`, {
     headers: { 'x-drop2-download-token': access.download_token },
@@ -125,12 +126,17 @@ export async function downloadStoredShare({
     throw new Error('Could not fetch manifest');
   }
   const manifestBytes = new Uint8Array(await manifestRes.arrayBuffer());
-  const manifest = decryptStoredManifest(manifestBytes, capabilityBytes);
-  const contentKey = deriveContentDek(manifest.content_dek);
+  const manifest = encrypted
+    ? decryptStoredManifest(manifestBytes, capabilityBytes)
+    : parsePlaintextManifest(manifestBytes);
+  validateManifest(manifest, access);
+  const contentKey = encrypted ? deriveContentDek(manifest.content_dek) : null;
 
-  onStatus('Downloading encrypted chunks…');
+  onStatus(encrypted ? 'Downloading encrypted chunks…' : 'Downloading file…');
 
-  const state = createFrameState();
+  const state = encrypted ? createFrameState() : null;
+  const plainChunks = [];
+  let receivedBytes = 0;
   for (let index = 1; index <= access.chunk_count; index += 1) {
     const chunkRes = await fetch(`/api/v1/stored/${shareId}/chunks/${index}`, {
       headers: { 'x-drop2-download-token': access.download_token },
@@ -139,21 +145,74 @@ export async function downloadStoredShare({
       throw new Error(`Chunk ${index} unavailable`);
     }
     const chunkBytes = new Uint8Array(await chunkRes.arrayBuffer());
-    onProgress(appendEncryptedFrames(state, chunkBytes, contentKey));
+    if (encrypted) {
+      onProgress(appendEncryptedFrames(state, chunkBytes, contentKey));
+    } else {
+      plainChunks.push(chunkBytes);
+      receivedBytes += chunkBytes.length;
+      onProgress(receivedBytes);
+    }
   }
 
-  const plaintext = finalizeEncryptedFrames(state, {
-    expectedBytes: manifest.plaintext_size,
-  });
+  const plaintext = encrypted
+    ? finalizeEncryptedFrames(state, { expectedBytes: manifest.plaintext_size })
+    : joinPlaintextChunks(plainChunks, manifest.plaintext_size);
 
-  fetch(`/api/v1/stored/${shareId}/download-complete`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-drop2-download-token': access.download_token,
-    },
-    body: JSON.stringify({ bytes_received: plaintext.length }),
-  }).catch((err) => console.warn('download-complete failed', err));
+  return {
+    bytes: plaintext,
+    complete: () => completeDownload(shareId, access.download_token, plaintext.length),
+  };
+}
 
+async function completeDownload(shareId, downloadToken, bytesReceived) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await fetch(`/api/v1/stored/${shareId}/download-complete`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-drop2-download-token': downloadToken,
+      },
+      body: JSON.stringify({ bytes_received: bytesReceived }),
+    }).catch(() => null);
+    if (response?.ok) return true;
+  }
+  return false;
+}
+
+export function parsePlaintextManifest(bytes) {
+  let manifest;
+  try {
+    manifest = JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    throw new Error('Invalid file manifest');
+  }
+  if (manifest?.v !== 1 || manifest.encryption_mode !== 'none') {
+    throw new Error('Invalid file manifest');
+  }
+  return manifest;
+}
+
+function validateManifest(manifest, access) {
+  if (
+    !Number.isSafeInteger(manifest.plaintext_size) ||
+    manifest.plaintext_size !== access.size ||
+    manifest.chunk_count !== access.chunk_count ||
+    manifest.display_name !== access.name
+  ) {
+    throw new Error('File details do not match');
+  }
+}
+
+function joinPlaintextChunks(chunks, expectedBytes) {
+  const received = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  if (received !== expectedBytes) {
+    throw new Error('Transfer incomplete');
+  }
+  const plaintext = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    plaintext.set(chunk, offset);
+    offset += chunk.length;
+  }
   return plaintext;
 }

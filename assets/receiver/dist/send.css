@@ -196,6 +196,14 @@
   border: 0;
 }
 
+.option-group.is-locked {
+  opacity: 0.58;
+}
+
+.option-group.is-locked .expiry-grid span {
+  cursor: not-allowed;
+}
+
 .option-group legend,
 .field-label {
   padding: 0;

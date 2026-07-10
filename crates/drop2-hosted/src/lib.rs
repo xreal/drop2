@@ -10,5 +10,6 @@ pub use api::{
 pub use error::HostedError;
 pub use sender::{HostedSender, HostedShareHandle, HostedShareResult, HostedTransferEvent};
 pub use stored::{
-    download_stored_share, upload_stored_share, StoredDownloadResult, StoredUploadResult,
+    complete_stored_download, download_stored_share, upload_stored_share, StoredDownloadResult,
+    StoredUploadResult,
 };

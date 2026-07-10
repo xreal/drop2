@@ -4,7 +4,7 @@ use drop2_crypto::{
 };
 use drop2_protocol::{
     CreateStoredShareRequest, CreateStoredShareResponse, ShareKind, StoredAccessRequest,
-    StoredAccessResponse,
+    StoredAccessResponse, StoredEncryptionMode,
 };
 use drop2_transfer::{
     encrypt_source_to_chunks, ByteSource, FileSource, FolderZipSource, InputKind, ShareInput,
@@ -106,12 +106,13 @@ pub async fn upload_stored_share(
 pub struct StoredDownloadResult {
     pub display_name: String,
     pub bytes: Vec<u8>,
+    pub download_token: String,
 }
 
 pub async fn download_stored_share(
     config: &ApiConfig,
     share_id: &str,
-    capability: &CapabilitySecret,
+    capability: Option<&CapabilitySecret>,
     pin: Option<&Pin>,
 ) -> Result<StoredDownloadResult, HostedError> {
     let access_body = StoredAccessRequest {
@@ -134,23 +135,54 @@ pub async fn download_stored_share(
         .await
         .map_err(|_| HostedError::InvalidResponse)?;
 
-    let manifest_bytes =
-        fetch_protected(config, share_id, "/manifest", &access.download_token).await?;
-
-    let (manifest, dek) = decrypt_manifest(&manifest_bytes, capability)
-        .map_err(|e| HostedError::Session(e.to_string()))?;
-
-    if manifest.plaintext_size > MAX_STORED_PLAINTEXT_BYTES {
+    if access.size > MAX_STORED_PLAINTEXT_BYTES {
         return Err(HostedError::Session(
             "stored share exceeds maximum supported size".into(),
         ));
     }
 
+    let (display_name, plaintext) = match access.encryption_mode {
+        StoredEncryptionMode::EndToEnd => {
+            let capability = capability.ok_or_else(|| {
+                HostedError::Session("stored share URL missing capability secret (#...)".into())
+            })?;
+            download_encrypted_chunks(config, share_id, &access, capability).await?
+        }
+        StoredEncryptionMode::None => download_plaintext_chunks(config, share_id, &access).await?,
+    };
+
+    Ok(StoredDownloadResult {
+        display_name,
+        bytes: plaintext,
+        download_token: access.download_token,
+    })
+}
+
+async fn download_encrypted_chunks(
+    config: &ApiConfig,
+    share_id: &str,
+    access: &StoredAccessResponse,
+    capability: &CapabilitySecret,
+) -> Result<(String, Vec<u8>), HostedError> {
+    let manifest_bytes =
+        fetch_protected(config, share_id, "/manifest", &access.download_token).await?;
+    let (manifest, dek) = decrypt_manifest(&manifest_bytes, capability)
+        .map_err(|e| HostedError::Session(e.to_string()))?;
+    if manifest.plaintext_size > MAX_STORED_PLAINTEXT_BYTES {
+        return Err(HostedError::Session(
+            "stored share exceeds maximum supported size".into(),
+        ));
+    }
+    if manifest.plaintext_size != access.size || manifest.chunk_count != access.chunk_count {
+        return Err(HostedError::Session(
+            "stored share metadata mismatch".into(),
+        ));
+    }
     let mut decryptor = ChunkDecryptor::new(dek);
     let mut plaintext = Vec::new();
 
     for index in 1..=access.chunk_count {
-        let chunk_bytes = fetch_protected(
+        let chunk = fetch_protected(
             config,
             share_id,
             &format!("/chunks/{index}"),
@@ -158,7 +190,7 @@ pub async fn download_stored_share(
         )
         .await?;
         let plain = decryptor
-            .decrypt_chunk(&chunk_bytes)
+            .decrypt_chunk(&chunk)
             .map_err(|e| HostedError::Session(e.to_string()))?;
         plaintext.extend_from_slice(&plain);
     }
@@ -166,14 +198,31 @@ pub async fn download_stored_share(
     if plaintext.len() as u64 != manifest.plaintext_size {
         return Err(HostedError::Session("size mismatch after decrypt".into()));
     }
+    Ok((manifest.display_name, plaintext))
+}
 
-    let _ =
-        complete_stored_download(config, share_id, &access.download_token, plaintext.len()).await;
-
-    Ok(StoredDownloadResult {
-        display_name: manifest.display_name,
-        bytes: plaintext,
-    })
+async fn download_plaintext_chunks(
+    config: &ApiConfig,
+    share_id: &str,
+    access: &StoredAccessResponse,
+) -> Result<(String, Vec<u8>), HostedError> {
+    let capacity = usize::try_from(access.size)
+        .map_err(|_| HostedError::Session("stored share exceeds platform limits".into()))?;
+    let mut plaintext = Vec::with_capacity(capacity);
+    for index in 1..=access.chunk_count {
+        let chunk = fetch_protected(
+            config,
+            share_id,
+            &format!("/chunks/{index}"),
+            &access.download_token,
+        )
+        .await?;
+        plaintext.extend_from_slice(&chunk);
+    }
+    if plaintext.len() as u64 != access.size {
+        return Err(HostedError::Session("download size mismatch".into()));
+    }
+    Ok((access.name.clone(), plaintext))
 }
 
 async fn create_stored_share(
@@ -292,7 +341,7 @@ async fn fetch_protected(
         .map(|b| b.to_vec())
 }
 
-async fn complete_stored_download(
+pub async fn complete_stored_download(
     config: &ApiConfig,
     share_id: &str,
     download_token: &str,

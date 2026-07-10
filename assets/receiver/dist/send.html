@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Send an end-to-end encrypted file with a private, expiring link. No account needed." />
+    <meta name="description" content="Send a file with an encrypted link or a short, PIN-protected quick link. No account needed." />
     <title>drop2.app — send files simply</title>
     <link rel="stylesheet" href="/assets/styles.css" />
     <link rel="stylesheet" href="/assets/send.css" />
@@ -30,7 +30,7 @@
         <section class="hero" aria-labelledby="page-title">
           <p class="eyebrow">Private file transfer</p>
           <h1 id="page-title">Send large files, <span>simply.</span></h1>
-          <p>Encrypted in your browser. No account, no clutter, just a link that disappears when it should.</p>
+          <p>Encrypted by default. No account, no clutter, just a link that disappears when it should.</p>
         </section>
 
         <section id="upload-card" class="card upload-card" aria-labelledby="send-title">
@@ -77,6 +77,13 @@
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
               </summary>
               <div class="advanced-list">
+                <label class="option-row" for="quick-link">
+                  <span class="row-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.1 1.1M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.1-1.1" /></svg>
+                  </span>
+                  <span class="row-copy"><strong>Short quick link</strong><small>Not end-to-end encrypted. PIN required; deleted after download or within 2 hours.</small></span>
+                  <span class="toggle"><input id="quick-link" type="checkbox" /><span></span></span>
+                </label>
                 <label class="option-row" for="pin-required">
                   <span class="row-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
@@ -108,7 +115,7 @@
             </div>
 
             <div class="form-actions">
-              <p>
+              <p id="security-note">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 4 7v6c0 5 3.5 7 8 8 4.5-1 8-3 8-8V7z" /><path d="m9 12 2 2 4-4" /></svg>
                 End-to-end encrypted and never analyzed.
               </p>
@@ -153,7 +160,7 @@
         </section>
 
         <div id="trust-strip" class="trust-strip" aria-label="Service qualities">
-          <span>Encrypted locally</span><span>You set the expiration</span><span>Direct and anonymous</span>
+          <span>Encrypted by default</span><span>Expiring links</span><span>Direct and anonymous</span>
         </div>
       </main>
 

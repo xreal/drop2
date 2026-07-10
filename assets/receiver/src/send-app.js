@@ -13,7 +13,9 @@ const fileSummaryEl = document.querySelector('#file-summary');
 const fileReadyEl = document.querySelector('#file-ready');
 const fileChangeEl = document.querySelector('#file-change');
 const expiryEls = [...document.querySelectorAll('input[name="expiry"]')];
+const expiryGroupEl = document.querySelector('.option-group');
 const pinRequiredEl = document.querySelector('#pin-required');
+const quickLinkEl = document.querySelector('#quick-link');
 const statusEl = document.querySelector('#status');
 const progressWrapEl = document.querySelector('#progress-wrap');
 const progressFillEl = document.querySelector('#progress-fill');
@@ -32,18 +34,24 @@ const copyLinkEl = document.querySelector('#copy-link');
 const copyPinEl = document.querySelector('#copy-pin');
 const sendAnotherEl = document.querySelector('#send-another');
 const trustStripEl = document.querySelector('#trust-strip');
+const securityNoteEl = document.querySelector('#security-note');
+const buttonLabelEl = document.querySelector('#btn-label');
 
 const expiryLabels = {
   after_download: 'It will be deleted after the first completed download.',
   '1d': 'It will expire in one day.',
   '2d': 'It will expire in two days.',
   '1w': 'It will expire in one week.',
+  quick: 'It will be deleted after the first completed download or within two hours.',
 };
 
 let selectedFile = null;
 let busy = false;
+let previousExpiryMode = '1w';
+let quickModeApplied = false;
 
 fileInputEl.addEventListener('change', () => selectFile(fileInputEl.files?.[0] ?? null));
+quickLinkEl.addEventListener('change', applyQuickLinkMode);
 
 for (const eventName of ['dragenter', 'dragover']) {
   filePickerEl.addEventListener(eventName, (event) => {
@@ -73,17 +81,19 @@ formEl.addEventListener('submit', async (event) => {
   successEl.hidden = true;
 
   try {
-    setStatus('Encrypting in your browser…', 'active');
+    const quickLink = quickLinkEl.checked;
+    setStatus(quickLink ? 'Preparing file…' : 'Encrypting in your browser…', 'active');
     const prepared = await prepareStoredUpload(file, {
       expiryMode,
       pinRequired: pinRequiredEl.checked,
+      quickLink,
       onProgress: updateProgress,
     });
 
-    setStatus('Uploading encrypted data…', 'active');
+    setStatus(quickLink ? 'Uploading file…' : 'Uploading encrypted data…', 'active');
     const result = await uploadPreparedStoredShare(prepared, { onProgress: updateProgress });
 
-    showSuccess({ result, file, expiryMode });
+    showSuccess({ result, file, expiryMode: prepared.expiryMode, quickLink });
   } catch (err) {
     setStatus(err.message || 'Upload failed. Please try again.', 'error');
   } finally {
@@ -123,12 +133,14 @@ function selectFile(file) {
   updateSendButton();
 }
 
-function showSuccess({ result, file, expiryMode }) {
+function showSuccess({ result, file, expiryMode, quickLink }) {
   shareUrlEl.value = result.share_url;
   pinEl.value = result.pin ?? '';
   pinFieldEl.hidden = !result.pin;
-  successPinChipEl.textContent = result.pin ? 'PIN protected' : 'No PIN';
-  shareHelperEl.textContent = result.pin
+  successPinChipEl.textContent = quickLink ? 'Quick link' : result.pin ? 'PIN protected' : 'No PIN';
+  shareHelperEl.textContent = quickLink
+    ? 'This short link is not end-to-end encrypted. Send its required PIN separately.'
+    : result.pin
     ? 'Send the PIN separately from the link for an extra access gate.'
     : 'Anyone with the full link can access and decrypt the file until it expires.';
   successFileNameEl.textContent = file.name || 'Untitled file';
@@ -144,6 +156,7 @@ function resetForm() {
   formEl.reset();
   fileInputEl.value = '';
   selectedFile = null;
+  previousExpiryMode = '1w';
   successEl.hidden = true;
   uploadCardEl.hidden = false;
   trustStripEl.hidden = false;
@@ -151,14 +164,16 @@ function resetForm() {
   progressFillEl.style.width = '0%';
   progressLabelEl.textContent = '';
   selectFile(null);
+  applyQuickLinkMode();
   uploadCardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function setBusy(nextBusy) {
   busy = nextBusy;
   fileInputEl.disabled = nextBusy;
-  pinRequiredEl.disabled = nextBusy;
-  for (const input of expiryEls) input.disabled = nextBusy;
+  quickLinkEl.disabled = nextBusy;
+  pinRequiredEl.disabled = nextBusy || quickLinkEl.checked;
+  for (const input of expiryEls) input.disabled = nextBusy || quickLinkEl.checked;
   progressWrapEl.hidden = !nextBusy;
   updateSendButton();
 
@@ -186,7 +201,30 @@ function setStatus(text, tone = 'default') {
 function updateProgress({ phase, done, total }) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
   progressFillEl.style.width = `${pct}%`;
-  progressLabelEl.textContent = `${phase === 'encrypt' ? 'Encrypted' : 'Uploaded'} ${pct}%`;
+  const verb = phase === 'encrypt' ? 'Encrypted' : phase === 'prepare' ? 'Prepared' : 'Uploaded';
+  progressLabelEl.textContent = `${verb} ${pct}%`;
+}
+
+function applyQuickLinkMode() {
+  const quickLink = quickLinkEl.checked;
+  if (quickLink && !quickModeApplied) {
+    previousExpiryMode = expiryEls.find((input) => input.checked)?.value ?? '1w';
+    const afterDownload = expiryEls.find((input) => input.value === 'after_download');
+    if (afterDownload) afterDownload.checked = true;
+    pinRequiredEl.checked = true;
+  } else if (!quickLink && quickModeApplied) {
+    const previous = expiryEls.find((input) => input.value === previousExpiryMode);
+    if (previous) previous.checked = true;
+  }
+  quickModeApplied = quickLink;
+  pinRequiredEl.disabled = busy || quickLink;
+  for (const input of expiryEls) input.disabled = busy || quickLink;
+  expiryGroupEl.classList.toggle('is-locked', quickLink);
+  expiryGroupEl.setAttribute('aria-disabled', String(quickLink));
+  securityNoteEl.lastChild.textContent = quickLink
+    ? ' PIN protected. Not end-to-end encrypted; access expires within 2 hours.'
+    : ' End-to-end encrypted and never analyzed.';
+  buttonLabelEl.textContent = quickLink ? 'Create quick link' : 'Send securely';
 }
 
 async function copyValue(input, button, defaultLabel) {

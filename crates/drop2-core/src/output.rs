@@ -36,6 +36,11 @@ pub fn print_receive(result: &crate::stored_share::ReceiveOutcome, url: &str) {
     println!("From: {url}");
     println!("Saving to: {}", result.output_path.display());
     println!("Done: {} bytes", result.bytes_written);
+    if !result.deletion_confirmed {
+        println!(
+            "Warning: automatic deletion could not be confirmed; expiry cleanup remains active"
+        );
+    }
 }
 
 pub fn print_hosted_share(result: &crate::hosted_share::HostedShareOutcome) {

@@ -11,5 +11,6 @@ pub use hosted::{
 pub use local::{JoinRequest, JoinResponse, LocalShareInfo, ShareKind, ShareMode};
 pub use stored::{
     CompleteStoredShareRequest, CreateStoredShareRequest, CreateStoredShareResponse,
-    StoredAccessRequest, StoredAccessResponse, StoredShareInfo, StoredShareStatus,
+    StoredAccessRequest, StoredAccessResponse, StoredEncryptionMode, StoredShareInfo,
+    StoredShareStatus,
 };

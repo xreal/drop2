@@ -18,7 +18,7 @@ Create and wire these before first deploy:
 | Worker | `drop2-worker` | API + browser app |
 | Durable Object | `LIVE_SHARE` | One instance per live share |
 | D1 database | `DB` | Stored-share metadata |
-| R2 bucket | `STORED` | Encrypted ciphertext only |
+| R2 bucket | `STORED` | Ciphertext by default; plaintext only for explicit quick links |
 
 ### First-time setup
 

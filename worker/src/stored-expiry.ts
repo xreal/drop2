@@ -27,6 +27,8 @@ export function resolveExpiry(body: ExpiryInput): ResolvedExpiry | null {
         expiresSeconds: MAX_EXPIRES_SECONDS,
         deleteAfterComplete: true,
       };
+    case 'quick':
+      return { mode: body.expiry_mode, expiresSeconds: 7_200, deleteAfterComplete: true };
     case '1d':
       return { mode: body.expiry_mode, expiresSeconds: 86_400, deleteAfterComplete: false };
     case '2d':

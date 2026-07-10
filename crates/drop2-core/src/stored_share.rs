@@ -4,7 +4,8 @@ use tokio::fs;
 
 use drop2_crypto::{generate_pin, CapabilitySecret, Pin};
 use drop2_hosted::{
-    api_base_from_env, check_reachable, download_stored_share, upload_stored_share,
+    api_base_from_env, check_reachable, complete_stored_download, download_stored_share,
+    upload_stored_share,
 };
 use drop2_transfer::inspect_path;
 
@@ -60,6 +61,7 @@ pub struct ReceiveOutcome {
     pub display_name: String,
     pub output_path: std::path::PathBuf,
     pub bytes_written: u64,
+    pub deletion_confirmed: bool,
 }
 
 pub async fn run_receive(opts: ReceiveOptions) -> Result<ReceiveOutcome, CoreError> {
@@ -70,23 +72,44 @@ pub async fn run_receive(opts: ReceiveOptions) -> Result<ReceiveOutcome, CoreErr
         return Err(CoreError::NetworkUnavailable);
     }
 
-    let capability = parsed.capability.as_ref().ok_or_else(|| {
-        CoreError::Usage("stored share URL missing capability secret (#...)".into())
-    })?;
-
-    let result = download_stored_share(&config, &parsed.share_id, capability, opts.pin.as_ref())
-        .await
-        .map_err(map_hosted)?;
+    let result = download_stored_share(
+        &config,
+        &parsed.share_id,
+        parsed.capability.as_ref(),
+        opts.pin.as_ref(),
+    )
+    .await
+    .map_err(map_hosted)?;
 
     let output_path = resolve_output_path(&result.display_name, opts.output.as_deref())?;
     fs::write(&output_path, &result.bytes)
         .await
         .map_err(|e| CoreError::Runtime(e.to_string()))?;
 
+    let mut deletion_confirmed = complete_stored_download(
+        &config,
+        &parsed.share_id,
+        &result.download_token,
+        result.bytes.len(),
+    )
+    .await
+    .is_ok();
+    if !deletion_confirmed {
+        deletion_confirmed = complete_stored_download(
+            &config,
+            &parsed.share_id,
+            &result.download_token,
+            result.bytes.len(),
+        )
+        .await
+        .is_ok();
+    }
+
     Ok(ReceiveOutcome {
         display_name: result.display_name,
         bytes_written: result.bytes.len() as u64,
         output_path,
+        deletion_confirmed,
     })
 }
 
@@ -127,11 +150,23 @@ fn resolve_output_path(
     output: Option<&Path>,
 ) -> Result<std::path::PathBuf, CoreError> {
     match output {
-        Some(path) if path.is_dir() || path.as_os_str().is_empty() => Ok(path.join(display_name)),
+        Some(path) if path.is_dir() || path.as_os_str().is_empty() => {
+            Ok(path.join(safe_file_name(display_name)?))
+        }
         Some(path) => Ok(path.to_path_buf()),
         None => Ok(std::env::current_dir()
             .map_err(|e| CoreError::Runtime(e.to_string()))?
-            .join(display_name)),
+            .join(safe_file_name(display_name)?)),
+    }
+}
+
+fn safe_file_name(display_name: &str) -> Result<&std::ffi::OsStr, CoreError> {
+    let mut components = Path::new(display_name).components();
+    match (components.next(), components.next()) {
+        (Some(std::path::Component::Normal(name)), None) => Ok(name),
+        _ => Err(CoreError::Runtime(
+            "share contains an unsafe file name".into(),
+        )),
     }
 }
 
@@ -161,5 +196,12 @@ mod tests {
         let parsed = parse_share_url("https://drop2.app/s/gS8M5b").unwrap();
         assert_eq!(parsed.share_id, "gS8M5b");
         assert!(parsed.capability.is_none());
+    }
+
+    #[test]
+    fn rejects_unsafe_received_file_names() {
+        assert!(safe_file_name("../report.txt").is_err());
+        assert!(safe_file_name("/tmp/report.txt").is_err());
+        assert_eq!(safe_file_name("report.txt").unwrap(), "report.txt");
     }
 }

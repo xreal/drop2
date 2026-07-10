@@ -1,14 +1,14 @@
 # Security
 
-`drop2` is designed so untrusted infrastructure never receives plaintext file contents. This document is the pre-launch security review checklist and vulnerability reporting guide.
+`drop2` encrypts file contents end-to-end by default. Browser quick links are an explicit exception: they trade end-to-end encryption for a short URL, become inaccessible after at most two hours, and are then removed by minutely cleanup. This document is the pre-launch security review checklist and vulnerability reporting guide.
 
 ## Threat model summary
 
 | Boundary | Trust level | Must not learn |
 |----------|-------------|----------------|
-| Control plane (Worker) | Untrusted | Plaintext, capability secrets, passwords, data keys |
+| Control plane (Worker) | Untrusted | Plaintext except explicit quick links, capability secrets, passwords, data keys |
 | Relay (Durable Object) | Untrusted | Plaintext content |
-| Storage (R2) | Untrusted | Plaintext, meaningful filenames in object keys |
+| Storage (R2) | Untrusted | Plaintext except explicit quick links, meaningful filenames in object keys |
 | LAN | Untrusted | Plaintext without client-side decryption |
 
 ## Pre-launch review checklist
@@ -18,7 +18,8 @@
 - [ ] Live transfers use X25519 key exchange + XChaCha20-Poly1305 AEAD
 - [ ] Stored shares encrypt locally before upload; DEK wrapped with capability secret
 - [ ] PIN is an access gate only, not the primary decryption secret for stored shares
-- [ ] Chunk and manifest integrity is authenticated (AEAD tags)
+- [ ] Encrypted chunk and manifest integrity is authenticated (AEAD tags)
+- [ ] Plaintext quick links are explicitly marked and cannot bypass mandatory PIN, first-completed-download deletion, or two-hour limits
 
 ### Client-side authority
 
@@ -45,7 +46,7 @@
 
 - [ ] Live shares expire on wait timeout (default 1h before first download)
 - [ ] Stored shares expire deterministically in D1
-- [ ] Hourly cron cleans expired stored metadata and R2 objects
+- [ ] Minutely cron cleans expired stored metadata and R2 objects
 - [ ] Sender disconnect ends active live share
 
 ### Supply chain
@@ -58,6 +59,7 @@
 
 - 4-digit PINs are not strong cryptographic protection alone
 - 6-character Share IDs are locators, not secrets
+- Browser quick links are not end-to-end encrypted; the Worker and R2 can read their contents
 - Traffic analysis (timing, sizes, IPs) is not fully hidden
 - Compromised sender/receiver endpoints are out of scope
 

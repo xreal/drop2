@@ -5,8 +5,10 @@ import { sha256 } from '@noble/hashes/sha256';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha';
 import {
   decryptStoredManifest,
+  downloadStoredShare,
   encryptStoredManifest,
   parseCapabilityFragment,
+  parsePlaintextManifest,
 } from '../src/stored-crypto.js';
 import {
   appendEncryptedFrames,
@@ -101,4 +103,68 @@ test('encryptFrame produces decryptable stored chunk frames', () => {
   appendEncryptedFrames(state, encrypted, key);
 
   assert.deepEqual(finalizeEncryptedFrames(state, { expectedBytes: plaintext.length }), plaintext);
+});
+
+test('parses a plaintext quick-link manifest', () => {
+  const manifest = {
+    v: 1,
+    encryption_mode: 'none',
+    display_name: 'note.txt',
+    plaintext_size: 4,
+    chunk_count: 1,
+  };
+
+  assert.deepEqual(
+    parsePlaintextManifest(new TextEncoder().encode(JSON.stringify(manifest))),
+    manifest,
+  );
+});
+
+test('downloads plaintext and defers completion until the caller saves it', async () => {
+  const contents = new TextEncoder().encode('quick');
+  const manifest = new TextEncoder().encode(JSON.stringify({
+    v: 1,
+    encryption_mode: 'none',
+    display_name: 'note.txt',
+    plaintext_size: contents.length,
+    chunk_count: 1,
+  }));
+  const originalFetch = globalThis.fetch;
+  const originalPrompt = globalThis.prompt;
+  let completeCalls = 0;
+  globalThis.prompt = () => '1234';
+  globalThis.fetch = async (url, options = {}) => {
+    if (url.endsWith('/access')) {
+      return Response.json({
+        download_token: 'token',
+        name: 'note.txt',
+        size: contents.length,
+        chunk_count: 1,
+      });
+    }
+    if (url.endsWith('/manifest')) return new Response(manifest);
+    if (url.endsWith('/chunks/1')) return new Response(contents);
+    if (url.endsWith('/download-complete') && options.method === 'POST') {
+      completeCalls += 1;
+      return Response.json({ ok: true });
+    }
+    throw new Error(`unexpected request: ${url}`);
+  };
+
+  try {
+    const transfer = await downloadStoredShare({
+      shareId: 'abc123',
+      capabilityBytes: null,
+      info: { pin_required: true, encryption_mode: 'none' },
+      onProgress() {},
+      onStatus() {},
+    });
+    assert.deepEqual(transfer.bytes, contents);
+    assert.equal(completeCalls, 0);
+    assert.equal(await transfer.complete(), true);
+    assert.equal(completeCalls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.prompt = originalPrompt;
+  }
 });

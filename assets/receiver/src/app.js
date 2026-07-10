@@ -22,6 +22,7 @@ const thanksEl = document.querySelector('#thanks');
 let liveInfo = null;
 let liveWatchStop = null;
 let uiPhase = 'loading';
+let quickLink = false;
 
 function setStatus(text, tone = 'default') {
   statusEl.textContent = text;
@@ -72,14 +73,14 @@ function setUiPhase(phase) {
 
   if (phase === 'connecting') {
     actionEl.disabled = true;
-    btnLabelEl.textContent = 'Connecting…';
+    btnLabelEl.textContent = quickLink ? 'Preparing…' : 'Connecting…';
     progressWrapEl.hidden = true;
     return;
   }
 
   if (phase === 'ready') {
     actionEl.disabled = false;
-    btnLabelEl.textContent = 'Download securely';
+    btnLabelEl.textContent = quickLink ? 'Download file' : 'Download securely';
     progressWrapEl.hidden = true;
     progressFillEl.style.width = '0%';
     return;
@@ -168,6 +169,7 @@ async function main() {
   try {
     const ctx = detectShareContext();
     const info = await loadShareInfo(ctx);
+    quickLink = info.mode === 'stored' && info.encryption_mode === 'none';
 
     if (info.mode === 'stored') {
       if (!isStoredAvailable(info.status)) {
@@ -175,12 +177,13 @@ async function main() {
         setUiPhase('unavailable');
         return;
       }
-      if (ctx.mode === 'hosted' && !ctx.capability) {
+      const encrypted = info.encryption_mode !== 'none';
+      if (ctx.mode === 'hosted' && encrypted && !ctx.capability) {
         setStatus(UserMsg.MISSING_CAPABILITY, 'error');
         setUiPhase('unavailable');
         return;
       }
-      if (ctx.mode === 'hosted' && ctx.capability && ctx.capability.length !== 32) {
+      if (ctx.mode === 'hosted' && encrypted && ctx.capability?.length !== 32) {
         setStatus(UserMsg.INVALID_CAPABILITY, 'error');
         setUiPhase('unavailable');
         return;
@@ -199,7 +202,12 @@ async function main() {
     const kindLabel = info.kind === 'folder' ? 'folder archive' : 'file';
     fileMetaEl.textContent = `${sizeLabel} · ${kindLabel}`;
 
-    const modeLabel = info.mode === 'stored' ? 'Stored share' : 'Live share';
+    const modeLabel =
+      info.mode === 'stored'
+        ? info.encryption_mode === 'none'
+          ? 'Quick link'
+          : 'Stored share'
+        : 'Live share';
     metaEl.innerHTML = `
       <dt>Share ID</dt><dd>${escapeHtml(info.share_id)}</dd>
       <dt>Mode</dt><dd>${modeLabel}</dd>
@@ -217,7 +225,12 @@ async function main() {
       }
       startLiveWatch(ctx, info);
     } else {
-      setStatus('Ready to download — stored until expiry', 'active');
+      setStatus(
+        info.encryption_mode === 'none'
+          ? 'PIN required — deleted after download or within two hours'
+          : 'Ready to download — stored until expiry',
+        'active',
+      );
       setUiPhase('ready');
     }
 
@@ -228,13 +241,16 @@ async function main() {
       liveWatchStop = null;
 
       setUiPhase('connecting');
-      setStatus('Preparing secure session…', 'active');
+      setStatus(quickLink ? 'Preparing download…' : 'Preparing secure session…', 'active');
 
       try {
         setUiPhase('downloading');
-        setStatus('Downloading encrypted stream…', 'active');
+        setStatus(
+          info.encryption_mode === 'none' ? 'Downloading file…' : 'Downloading encrypted stream…',
+          'active',
+        );
 
-        const bytes = await joinAndDownload({
+        const transfer = await joinAndDownload({
           ctx,
           info: liveInfo ?? info,
           onStatus: (text) => setStatus(text, 'active'),
@@ -244,7 +260,7 @@ async function main() {
           },
         });
 
-        const blob = new Blob([bytes]);
+        const blob = new Blob([transfer.bytes]);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -252,7 +268,15 @@ async function main() {
         a.click();
         URL.revokeObjectURL(url);
 
-        setStatus('Download complete', 'active');
+        const deletionConfirmed = transfer.complete ? await transfer.complete() : true;
+        setStatus(
+          deletionConfirmed
+            ? 'Download complete'
+            : quickLink
+            ? 'Download complete — deletion pending; access expires within two hours'
+            : 'Download complete — automatic deletion could not be confirmed',
+          deletionConfirmed ? 'active' : 'warn',
+        );
         setUiPhase('complete');
       } catch (err) {
         setStatus(err.message || UserMsg.DOWNLOAD_FAILED, 'error');

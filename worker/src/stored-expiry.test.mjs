@@ -18,6 +18,14 @@ test('resolveExpiry maps after_download to delete_after_complete', () => {
   assert.equal(r.expiresSeconds, MAX_EXPIRES_SECONDS);
 });
 
+test('resolveExpiry caps quick links at two hours and deletes after download', () => {
+  assert.deepEqual(resolveExpiry({ expiry_mode: 'quick' }), {
+    mode: 'quick',
+    expiresSeconds: 7_200,
+    deleteAfterComplete: true,
+  });
+});
+
 test('resolveExpiry maps 1d and 2d to relative seconds', () => {
   assert.equal(resolveExpiry({ expiry_mode: '1d' }).expiresSeconds, 86_400);
   assert.equal(resolveExpiry({ expiry_mode: '2d' }).expiresSeconds, 172_800);

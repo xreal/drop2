@@ -11,14 +11,14 @@ export const ANONYMOUS_BROWSER_SEND_LIMIT = 10 * 1024 * 1024;
 
 export async function prepareStoredUpload(
   file,
-  { expiryMode = '1w', pinRequired = true, onProgress } = {},
+  { expiryMode = '1w', pinRequired = true, quickLink = false, onProgress } = {},
 ) {
   if (file.size > ANONYMOUS_BROWSER_SEND_LIMIT) {
     throw new Error('Anonymous browser sends are limited to 10 MiB for now.');
   }
 
-  const material = generateStoredMaterial();
-  const pin = pinRequired ? generatePin() : null;
+  const material = quickLink ? null : generateStoredMaterial();
+  const pin = quickLink || pinRequired ? generatePin() : null;
   const pinMaterial = pin ? hashPin(pin) : { pin_salt: '', pin_hash: '' };
   const chunks = [];
   let ciphertextBytesTotal = 0;
@@ -28,12 +28,12 @@ export async function prepareStoredUpload(
   for (let offset = 0; offset < file.size; offset += STORED_CHUNK_PLAINTEXT_SIZE) {
     const slice = file.slice(offset, offset + STORED_CHUNK_PLAINTEXT_SIZE);
     const plain = new Uint8Array(await slice.arrayBuffer());
-    const encrypted = encryptFrame(plain, material.dek, index);
-    chunks.push(encrypted);
-    ciphertextBytesTotal += encrypted.length;
+    const stored = quickLink ? plain : encryptFrame(plain, material.dek, index);
+    chunks.push(stored);
+    ciphertextBytesTotal += stored.length;
     readBytes += plain.length;
     index += 1;
-    onProgress?.({ phase: 'encrypt', done: readBytes, total: file.size });
+    onProgress?.({ phase: quickLink ? 'prepare' : 'encrypt', done: readBytes, total: file.size });
   }
 
   if (file.size === 0) {
@@ -47,29 +47,34 @@ export async function prepareStoredUpload(
     plaintext_size: file.size,
     chunk_count: chunks.length,
     chunk_plaintext_size: STORED_CHUNK_PLAINTEXT_SIZE,
-    content_dek: b64urlEncode(material.dek),
+    ...(quickLink
+      ? { encryption_mode: 'none' }
+      : { content_dek: b64urlEncode(material.dek) }),
   };
-  const encryptedManifest = encryptStoredManifest(manifest, material.capabilityBytes);
-  ciphertextBytesTotal += encryptedManifest.length;
+  const storedManifest = quickLink
+    ? new TextEncoder().encode(JSON.stringify(manifest))
+    : encryptStoredManifest(manifest, material.capabilityBytes);
+  ciphertextBytesTotal += storedManifest.length;
 
   return {
     fileName: manifest.display_name,
     size: file.size,
-    expiryMode,
+    expiryMode: quickLink ? 'quick' : expiryMode,
     pin,
-    capability: material.capability,
-    manifest: encryptedManifest,
+    capability: material?.capability ?? null,
+    manifest: storedManifest,
     chunks,
     createBody: {
       kind: 'file',
       name: manifest.display_name,
       size: file.size,
-      expiry_mode: expiryMode,
+      expiry_mode: quickLink ? 'quick' : expiryMode,
       max_downloads: 20,
+      encryption_mode: quickLink ? 'none' : 'end_to_end',
       ...pinMaterial,
       chunk_count: chunks.length,
       chunk_plaintext_size: STORED_CHUNK_PLAINTEXT_SIZE,
-      manifest_ciphertext_bytes: encryptedManifest.length,
+      manifest_ciphertext_bytes: storedManifest.length,
       ciphertext_bytes_total: ciphertextBytesTotal,
     },
   };
@@ -109,7 +114,9 @@ export async function uploadPreparedStoredShare(prepared, { onProgress } = {}) {
 
   return {
     ...create,
-    share_url: `${create.share_url_base}#${prepared.capability}`,
+    share_url: prepared.capability
+      ? `${create.share_url_base}#${prepared.capability}`
+      : create.share_url_base,
     pin: prepared.pin,
   };
 }

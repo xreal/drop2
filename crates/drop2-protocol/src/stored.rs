@@ -3,6 +3,17 @@ use serde::{Deserialize, Serialize};
 use crate::local::{ShareKind, ShareMode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StoredEncryptionMode {
+    EndToEnd,
+    None,
+}
+
+fn default_stored_encryption_mode() -> StoredEncryptionMode {
+    StoredEncryptionMode::EndToEnd
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum StoredShareStatus {
     Uploading,
@@ -65,4 +76,26 @@ pub struct StoredAccessResponse {
     pub size: u64,
     pub chunk_count: u32,
     pub status: StoredShareStatus,
+    #[serde(default = "default_stored_encryption_mode")]
+    pub encryption_mode: StoredEncryptionMode,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_access_response_defaults_to_end_to_end_encryption() {
+        let response: StoredAccessResponse = serde_json::from_value(serde_json::json!({
+            "download_token": "token",
+            "kind": "file",
+            "name": "report.txt",
+            "size": 5,
+            "chunk_count": 1,
+            "status": "ready"
+        }))
+        .unwrap();
+
+        assert_eq!(response.encryption_mode, StoredEncryptionMode::EndToEnd);
+    }
 }

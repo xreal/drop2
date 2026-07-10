@@ -24,10 +24,11 @@ The hosted service and LAN relay never see your plaintext. Encryption happens on
 ## Why drop2
 
 - **One command to share** — no account, no upload UI, no config file
-- **End-to-end encrypted** — X25519 key exchange and XChaCha20-Poly1305; infrastructure stores ciphertext only
+- **End-to-end encrypted by default** — X25519 key exchange and XChaCha20-Poly1305; only explicit quick links store plaintext
 - **Works offline** — `--local` shares on your LAN with an embedded browser receiver (HTTPS, self-signed cert)
 - **Live or stored** — stream while you are online, or upload an encrypted copy that expires after five days by default
 - **Browser-first receiving** — receivers use a zero-install web page; CLI fallback with `drop2 get`
+- **Optional quick links** — the browser can create a short, mandatory-PIN link that is not end-to-end encrypted and expires within two hours
 
 ## Share modes
 
@@ -36,9 +37,11 @@ The hosted service and LAN relay never see your plaintext. Encryption happens on
 | **Live (internet)** | `drop2 file.zip` | Yes | Short public URL | Auto-generated |
 | **Live (LAN)** | `drop2 --local file.zip` | Yes | Local HTTPS URL | Optional |
 | **Stored** | `drop2 --keep file.zip` | No (after upload) | Short public URL | Auto-generated |
+| **Quick link (browser)** | [drop2.app](https://drop2.app) | No (after upload) | Short public URL | Required |
 
 Live shares auto-close after one hour if no download starts (override with `--wait`).
 Stored shares default to a five-day retention (`--expires 7d` to change).
+Quick links are deleted after the first completed download by default and become inaccessible after two hours.
 
 ## Install
 
@@ -128,8 +131,9 @@ drop2 get https://drop2.app/s/gS8M5b --pin 4821
 drop2 get 'https://drop2.app/s/gS8M5b#secret' --output ~/Downloads
 ```
 
-For stored shares, the decryption secret lives in the URL fragment (`#...`).
+For encrypted stored shares, the decryption secret lives in the URL fragment (`#...`).
 It is never sent to the server when the page loads.
+Browser quick links omit this fragment and are therefore not end-to-end encrypted; use the required PIN as a separate access gate.
 
 ### Flags
 
@@ -157,6 +161,7 @@ Sender (drop2 CLI)                Untrusted relay                 Receiver (brow
 - **Stored shares:** encrypted locally, uploaded as chunks; metadata and ciphertext live in Cloudflare D1 and R2.
 - **LAN shares:** the CLI embeds the browser receiver — no CDN, no third-party scripts.
 - **PINs:** gate access on the control plane; they are not the primary decryption secret for stored shares.
+- **Quick links:** store plaintext under a random R2 key to produce a typeable URL; they require a PIN and have a two-hour maximum lifetime.
 
 See [SECURITY.md](SECURITY.md) for the threat model, review checklist, and responsible disclosure.
 

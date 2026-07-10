@@ -378,6 +378,7 @@ async function handleCreateStored(
       ciphertext_bytes_total: body.ciphertext_bytes_total as number,
       expiry_mode: body.expiry_mode as string | undefined,
       max_downloads: body.max_downloads as number | undefined,
+      encryption_mode: body.encryption_mode as string | undefined,
     },
     url.origin,
   );
