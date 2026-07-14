@@ -16,6 +16,12 @@ import {
 } from './stored-share';
 import { validPinMaterial } from './pin';
 import { notifyStoredShare } from './email-notify';
+import {
+  handleAuthSession,
+  handleGithubCallback,
+  handleGithubStart,
+  handleLogout,
+} from './auth-routes';
 
 export { LiveShareDO };
 
@@ -27,6 +33,22 @@ export default {
 
     if (url.pathname === '/api/v1/health') {
       return Response.json({ ok: true, service: 'drop2.app' });
+    }
+
+    if (url.pathname === '/auth/github/start' && request.method === 'GET') {
+      return handleGithubStart(request, env);
+    }
+
+    if (url.pathname === '/auth/github/callback' && request.method === 'GET') {
+      return handleGithubCallback(request, env);
+    }
+
+    if (url.pathname === '/auth/logout' && request.method === 'POST') {
+      return handleLogout(request, env);
+    }
+
+    if (url.pathname === '/api/v1/auth/session' && request.method === 'GET') {
+      return handleAuthSession(request, env);
     }
 
     if (url.pathname.startsWith('/assets/')) {
@@ -389,6 +411,7 @@ async function handleCreateStored(
       encryption_mode: body.encryption_mode as string | undefined,
     },
     url.origin,
+    request,
   );
 }
 

@@ -24,7 +24,7 @@
           <header class="brand">
             <p class="eyebrow">Private file transfer</p>
             <h1>Receive a file</h1>
-            <p>The file is decrypted on this device. drop2 never sees the contents.</p>
+            <p id="privacy-copy">The file is decrypted on this device. drop2 never sees the contents.</p>
           </header>
 
           <section class="card receive-card">
@@ -36,10 +36,10 @@
             <p id="status" class="status-message" role="status">Loading…</p>
             <div id="progress-wrap" class="progress-wrap" hidden><div class="progress-track" aria-hidden="true"><div id="progress-fill" class="progress-fill"></div></div><p id="progress-label" class="progress-label"></p></div>
             <button id="download" type="button" class="primary-action" disabled><span id="btn-icon" class="btn-icon" aria-hidden="true"></span><span id="btn-label">Preparing…</span></button>
-            <section id="thanks" class="thanks" hidden><div class="thanks-icon" aria-hidden="true">✓</div><h2>Download complete</h2><p>Your file was decrypted in this browser and saved locally. You can close this tab.</p></section>
+            <section id="thanks" class="thanks" hidden><div class="thanks-icon" aria-hidden="true">✓</div><h2>Download complete</h2><p id="thanks-copy">Your file was decrypted in this browser and saved locally. You can close this tab.</p></section>
           </section>
 
-          <p class="site-pitch">The link carries the decryption capability. A PIN, when enabled, adds a separate access gate.</p>
+          <p id="site-pitch" class="site-pitch">The link carries the decryption capability. A PIN, when enabled, adds a separate access gate.</p>
         </main>
       </div>
 

@@ -158,6 +158,48 @@ summary:focus-visible {
   background: rgba(255, 255, 255, 0.7);
 }
 
+.auth-slot {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.35rem;
+}
+
+.auth-link {
+  padding: 0.5rem 0.7rem;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.auth-link:hover {
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.auth-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.auth-login {
+  padding: 0.5rem 0.35rem 0.5rem 0.7rem;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.auth-signout {
+  padding-left: 0.35rem;
+}
+
 .page-main {
   width: min(620px, 100%);
   flex: 1;

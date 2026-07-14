@@ -8,13 +8,24 @@ import { generatePin, hashPin } from './pin.js';
 
 export const STORED_CHUNK_PLAINTEXT_SIZE = 8 * 1024 * 1024;
 export const ANONYMOUS_BROWSER_SEND_LIMIT = 10 * 1024 * 1024;
+export const AUTHENTICATED_BROWSER_SEND_LIMIT = 1024 * 1024 * 1024;
 
 export async function prepareStoredUpload(
   file,
-  { expiryMode = '1w', pinRequired = true, quickLink = false, onProgress } = {},
+  {
+    expiryMode = '1w',
+    pinRequired = true,
+    quickLink = false,
+    maxPlaintextBytes = ANONYMOUS_BROWSER_SEND_LIMIT,
+    onProgress,
+  } = {},
 ) {
-  if (file.size > ANONYMOUS_BROWSER_SEND_LIMIT) {
-    throw new Error('Anonymous browser sends are limited to 10 MiB for now.');
+  if (file.size > maxPlaintextBytes) {
+    throw new Error(
+      maxPlaintextBytes <= ANONYMOUS_BROWSER_SEND_LIMIT
+        ? 'Anonymous browser sends are limited to 10 MiB for now.'
+        : 'Browser sends are limited to 1 GiB per file.',
+    );
   }
 
   const material = quickLink ? null : generateStoredMaterial();
@@ -83,6 +94,7 @@ export async function prepareStoredUpload(
 export async function uploadPreparedStoredShare(prepared, { onProgress } = {}) {
   const createRes = await fetch('/api/v1/stored', {
     method: 'POST',
+    credentials: 'same-origin',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(prepared.createBody),
   });
@@ -107,6 +119,7 @@ export async function uploadPreparedStoredShare(prepared, { onProgress } = {}) {
 
   const completeRes = await fetch(`/api/v1/stored/${create.share_id}/complete`, {
     method: 'POST',
+    credentials: 'same-origin',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ upload_token: create.upload_token }),
   });
@@ -124,6 +137,7 @@ export async function uploadPreparedStoredShare(prepared, { onProgress } = {}) {
 async function putBytes(url, uploadToken, bytes) {
   const res = await fetch(url, {
     method: 'PUT',
+    credentials: 'same-origin',
     headers: {
       'content-type': 'application/octet-stream',
       'x-drop2-upload-token': uploadToken,

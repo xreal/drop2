@@ -18,6 +18,9 @@ const progressWrapEl = document.querySelector('#progress-wrap');
 const progressFillEl = document.querySelector('#progress-fill');
 const progressLabelEl = document.querySelector('#progress-label');
 const thanksEl = document.querySelector('#thanks');
+const thanksCopyEl = document.querySelector('#thanks-copy');
+const privacyCopyEl = document.querySelector('#privacy-copy');
+const sitePitchEl = document.querySelector('#site-pitch');
 
 let liveInfo = null;
 let liveWatchStop = null;
@@ -170,6 +173,14 @@ async function main() {
     const ctx = detectShareContext();
     const info = await loadShareInfo(ctx);
     quickLink = info.mode === 'stored' && info.encryption_mode === 'none';
+    if (quickLink) {
+      privacyCopyEl.textContent =
+        'This quick share is not end-to-end encrypted. The required PIN controls access.';
+      thanksCopyEl.textContent =
+        'Your file was downloaded and saved locally. You can close this tab.';
+      sitePitchEl.textContent =
+        'This short link has no decryption capability. Its PIN is the required access gate.';
+    }
 
     if (info.mode === 'stored') {
       if (!isStoredAvailable(info.status)) {

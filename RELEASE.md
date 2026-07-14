@@ -46,7 +46,19 @@ npm run deploy
 
 ### Secrets and vars
 
-No Worker secrets are required for the MVP.
+No Worker secrets are required for the anonymous MVP.
+
+For GitHub-authenticated browser sends (up to 1 GiB), set:
+
+```bash
+cd worker
+npx wrangler secret put GITHUB_CLIENT_ID
+npx wrangler secret put GITHUB_CLIENT_SECRET
+npx wrangler secret put AUTH_SESSION_SECRET
+```
+
+OAuth callback URL: `https://drop2.app/auth/github/callback` (plus a local callback when using `wrangler dev`).
+Apply D1 migration `0006_hosted_auth.sql` via deploy/migrations.
 
 ## 3. DNS and domain
 

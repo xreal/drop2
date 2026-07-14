@@ -32,11 +32,13 @@ import {
   type StoredEncryptionMode,
 } from './stored-policy';
 import { createEmailNotifyProof } from './email-notify';
+import { evaluateBrowserSendSize } from './auth-limits';
+import { evaluateQuota, loadQuotaUsage, recordUsageEvent } from './auth-quota';
+import { resolveSession } from './auth-session';
 
 const COOLDOWN_MS = 15 * 60 * 1000;
 const MAX_PIN_FAILURES = 3;
 const DOWNLOAD_TOKEN_TTL_MS = 10 * 60 * 1000;
-const BROWSER_ANON_MAX_PLAINTEXT_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MAX_DOWNLOADS = 20;
 
 export interface StoredShareEnv extends AccessGuardEnv {
@@ -73,6 +75,7 @@ interface StoredRow {
   encryption_mode: StoredEncryptionMode;
   email_notify_token_hash: string;
   email_recipient_count: number;
+  account_id: string | null;
 }
 
 export interface CreateStoredBody {
@@ -95,6 +98,7 @@ export async function createStoredShare(
   env: StoredShareEnv,
   body: CreateStoredBody,
   origin: string,
+  request?: Request,
 ): Promise<Response> {
   if (body.kind !== 'file' && body.kind !== 'folder') {
     return jsonError('invalid kind', 400);
@@ -176,14 +180,38 @@ export async function createStoredShare(
   ) {
     return jsonError('invalid plaintext storage size', 400);
   }
-  if (isBrowserSend(body) && body.size > BROWSER_ANON_MAX_PLAINTEXT_BYTES) {
-    return Response.json({
-      error: 'auth_required',
-      message: 'Sign in to share files this large on drop2.app',
-      limits: {
-        max_anonymous_browser_send_bytes: BROWSER_ANON_MAX_PLAINTEXT_BYTES,
-      },
-    }, { status: 403 });
+  let accountId: string | null = null;
+  if (isBrowserSend(body)) {
+    const session = request ? await resolveSession(env.DB, request) : null;
+    let quota = null;
+    if (session && session.account.eligible === 1) {
+      const usage = await loadQuotaUsage(env.DB, session.account.account_id);
+      quota = evaluateQuota(usage, body.size);
+    }
+    const gate = evaluateBrowserSendSize(
+      body.size,
+      session
+        ? {
+            signedIn: true,
+            eligible: session.account.eligible === 1,
+            suspended: session.account.status === 'suspended',
+            accountId: session.account.account_id,
+            quota,
+          }
+        : null,
+    );
+    if (!gate.allow) {
+      return Response.json(
+        {
+          error: gate.error,
+          message: gate.message,
+          ...(gate.limits ? { limits: gate.limits } : {}),
+          ...(gate.quota ? { quota: gate.quota } : {}),
+        },
+        { status: gate.status },
+      );
+    }
+    accountId = gate.accountId;
   }
 
   const shareId = generateShareId();
@@ -204,8 +232,8 @@ export async function createStoredShare(
       manifest_object_key, chunk_count, chunk_plaintext_size,
       manifest_ciphertext_bytes, ciphertext_bytes_total, upload_token,
       expiry_mode, max_downloads, delete_after_complete, encryption_mode,
-      email_notify_token_hash
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      email_notify_token_hash, account_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       shareId,
@@ -229,6 +257,7 @@ export async function createStoredShare(
       expiry.deleteAfterComplete ? 1 : 0,
       encryptionMode,
       emailNotify.hash,
+      accountId,
     )
     .run();
 
@@ -591,6 +620,15 @@ export async function completeStoredShare(
   )
     .bind(shareId)
     .run();
+
+  if (row.account_id) {
+    await recordUsageEvent(
+      env.DB,
+      row.account_id,
+      shareId,
+      row.plaintext_size,
+    );
+  }
 
   return Response.json({ ok: true, status: 'ready' });
 }

@@ -44,3 +44,13 @@ test('prepareStoredUpload creates a PIN-protected plaintext quick link', async (
   assert.equal(prepared.createBody.max_downloads, 20);
   assert.deepEqual(prepared.chunks[0], new TextEncoder().encode('quick contents'));
 });
+
+test('prepareStoredUpload rejects files over the configured max', async () => {
+  await assert.rejects(
+    () =>
+      prepareStoredUpload(testFile('big.bin', 'x'.repeat(11)), {
+        maxPlaintextBytes: 10,
+      }),
+    /limited/,
+  );
+});

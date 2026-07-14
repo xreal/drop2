@@ -2,7 +2,12 @@ import type { LiveShareStatus, ShareKind, ShareMode } from './protocol';
 
 export type { ShareKind, ShareMode, LiveShareStatus };
 
-export type Env = Cloudflare.Env;
+/** Worker bindings plus optional GitHub auth secrets. */
+export type Env = Cloudflare.Env & {
+  GITHUB_CLIENT_ID?: string;
+  GITHUB_CLIENT_SECRET?: string;
+  AUTH_SESSION_SECRET?: string;
+};
 
 export interface CreateLiveShareBody {
   kind: ShareKind;

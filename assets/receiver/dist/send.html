@@ -22,6 +22,13 @@
             <a href="/" aria-current="page">Send</a>
             <a href="/faq">FAQ</a>
             <a href="https://github.com/xreal/drop2" rel="noopener noreferrer">GitHub</a>
+            <span id="auth-slot" class="auth-slot">
+              <a id="auth-signin" class="auth-link" href="/auth/github/start">Sign in with GitHub</a>
+              <span id="auth-user" class="auth-user" hidden>
+                <span id="auth-login" class="auth-login"></span>
+                <button id="auth-signout" type="button" class="auth-link auth-signout">Sign out</button>
+              </span>
+            </span>
           </nav>
         </div>
       </header>
@@ -40,7 +47,7 @@
             </span>
             <div>
               <h2 id="send-title">Send a file</h2>
-              <p>Up to 10 MiB anonymously. No account needed.</p>
+              <p id="send-limit-copy">Up to 10 MiB anonymously. Sign in with GitHub for up to 1 GiB.</p>
             </div>
           </div>
 

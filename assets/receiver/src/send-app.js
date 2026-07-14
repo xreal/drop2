@@ -1,5 +1,6 @@
 import {
   ANONYMOUS_BROWSER_SEND_LIMIT,
+  AUTHENTICATED_BROWSER_SEND_LIMIT,
   prepareStoredUpload,
   uploadPreparedStoredShare,
 } from './stored-upload.js';
@@ -45,6 +46,11 @@ const emailStatusEl = document.querySelector('#email-status');
 const emailSubmitEl = document.querySelector('#email-submit');
 const emailCompleteEl = document.querySelector('#email-complete');
 const emailCompleteCopyEl = document.querySelector('#email-complete-copy');
+const sendLimitCopyEl = document.querySelector('#send-limit-copy');
+const authSigninEl = document.querySelector('#auth-signin');
+const authUserEl = document.querySelector('#auth-user');
+const authLoginEl = document.querySelector('#auth-login');
+const authSignoutEl = document.querySelector('#auth-signout');
 
 const expiryLabels = {
   after_download: 'It will be deleted after the first completed download.',
@@ -59,9 +65,12 @@ let busy = false;
 let previousExpiryMode = '1w';
 let quickModeApplied = false;
 let currentShare = null;
+let maxPlaintextBytes = ANONYMOUS_BROWSER_SEND_LIMIT;
+let authSession = null;
 
 fileInputEl.addEventListener('change', () => selectFile(fileInputEl.files?.[0] ?? null));
 quickLinkEl.addEventListener('change', applyQuickLinkMode);
+authSignoutEl?.addEventListener('click', signOut);
 
 for (const eventName of ['dragenter', 'dragover']) {
   filePickerEl.addEventListener(eventName, (event) => {
@@ -84,7 +93,7 @@ filePickerEl.addEventListener('drop', (event) => {
 formEl.addEventListener('submit', async (event) => {
   event.preventDefault();
   const file = selectedFile;
-  if (!file || file.size > ANONYMOUS_BROWSER_SEND_LIMIT || file.size === 0) return;
+  if (!file || file.size > maxPlaintextBytes || file.size === 0) return;
 
   const expiryMode = expiryEls.find((input) => input.checked)?.value ?? '1w';
   setBusy(true);
@@ -97,6 +106,7 @@ formEl.addEventListener('submit', async (event) => {
       expiryMode,
       pinRequired: pinRequiredEl.checked,
       quickLink,
+      maxPlaintextBytes,
       onProgress: updateProgress,
     });
 
@@ -104,6 +114,7 @@ formEl.addEventListener('submit', async (event) => {
     const result = await uploadPreparedStoredShare(prepared, { onProgress: updateProgress });
 
     showSuccess({ result, file, expiryMode: prepared.expiryMode, quickLink });
+    await refreshAuthSession();
   } catch (err) {
     setStatus(err.message || 'Upload failed. Please try again.', 'error');
   } finally {
@@ -115,6 +126,85 @@ copyLinkEl.addEventListener('click', () => copyValue(shareUrlEl, copyLinkEl, 'Co
 copyPinEl.addEventListener('click', () => copyValue(pinEl, copyPinEl, 'Copy PIN'));
 sendAnotherEl.addEventListener('click', resetForm);
 emailFormEl.addEventListener('submit', sendShareEmail);
+
+void bootAuth();
+
+async function bootAuth() {
+  await refreshAuthSession();
+  const params = new URLSearchParams(window.location.search);
+  const authFlag = params.get('auth');
+  if (authFlag === 'ok') {
+    setStatus('Signed in. You can send files up to 1 GiB.', 'active');
+  } else if (authFlag === 'ineligible') {
+    setStatus(
+      'Signed in, but this GitHub account is not eligible for large sends yet (180+ days old and at least 2 public repos).',
+      'error',
+    );
+  } else if (authFlag === 'suspended') {
+    setStatus('This account is suspended and cannot create large shares.', 'error');
+  } else if (authFlag === 'error') {
+    setStatus('GitHub sign-in failed. Please try again.', 'error');
+  }
+  if (authFlag) {
+    params.delete('auth');
+    const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`;
+    window.history.replaceState({}, '', next);
+  }
+}
+
+async function refreshAuthSession() {
+  try {
+    const res = await fetch('/api/v1/auth/session', { credentials: 'same-origin' });
+    if (!res.ok) throw new Error('session unavailable');
+    authSession = await res.json();
+  } catch {
+    authSession = {
+      signed_in: false,
+      eligible: false,
+    };
+  }
+  applyAuthSession();
+}
+
+function applyAuthSession() {
+  const signedIn = Boolean(authSession?.signed_in);
+  const eligible = Boolean(authSession?.eligible);
+  maxPlaintextBytes =
+    signedIn && eligible ? AUTHENTICATED_BROWSER_SEND_LIMIT : ANONYMOUS_BROWSER_SEND_LIMIT;
+
+  if (authSigninEl && authUserEl && authLoginEl) {
+    authSigninEl.hidden = signedIn;
+    authUserEl.hidden = !signedIn;
+    authLoginEl.textContent = signedIn ? `@${authSession.github_login}` : '';
+  }
+
+  if (sendLimitCopyEl) {
+    if (signedIn && eligible) {
+      sendLimitCopyEl.textContent =
+        'Signed in. Up to 1 GiB per file (1.2 GiB/day, 2 GiB/week).';
+    } else if (signedIn) {
+      sendLimitCopyEl.textContent =
+        'Signed in. Large sends need a GitHub account at least 180 days old with 2+ public repos.';
+    } else {
+      sendLimitCopyEl.textContent =
+        'Up to 10 MiB anonymously. Sign in with GitHub for up to 1 GiB.';
+    }
+  }
+
+  if (selectedFile) selectFile(selectedFile);
+  else updateSendButton();
+}
+
+async function signOut() {
+  try {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
+  } catch {
+    // ignore network errors; local UI still resets
+  }
+  authSession = { signed_in: false, eligible: false };
+  applyAuthSession();
+  setStatus('Signed out.', 'active');
+}
 
 function selectFile(file) {
   selectedFile = file;
@@ -133,10 +223,21 @@ function selectFile(file) {
   fileNameEl.textContent = file.name || 'Untitled file';
   fileSummaryEl.textContent = formatBytes(file.size);
 
-  if (file.size > ANONYMOUS_BROWSER_SEND_LIMIT) {
-    fileSummaryEl.textContent += ' · exceeds the 10 MiB limit';
+  if (file.size > maxPlaintextBytes) {
+    const limitLabel =
+      maxPlaintextBytes <= ANONYMOUS_BROWSER_SEND_LIMIT ? '10 MiB' : '1 GiB';
+    fileSummaryEl.textContent += ` · exceeds the ${limitLabel} limit`;
     fileReadyEl.hidden = true;
-    setStatus('Choose a file no larger than 10 MiB.', 'error');
+    if (maxPlaintextBytes <= ANONYMOUS_BROWSER_SEND_LIMIT && !authSession?.signed_in) {
+      setStatus('Sign in with GitHub to send files larger than 10 MiB (up to 1 GiB).', 'error');
+    } else if (authSession?.signed_in && !authSession?.eligible) {
+      setStatus(
+        'This GitHub account is not eligible for large sends (180+ days and 2+ public repos).',
+        'error',
+      );
+    } else {
+      setStatus(`Choose a file no larger than ${limitLabel}.`, 'error');
+    }
   } else if (file.size === 0) {
     fileReadyEl.hidden = true;
     setStatus('Empty files are not supported yet.', 'error');
@@ -208,6 +309,7 @@ async function sendShareEmail(event) {
   try {
     const response = await fetch(`/api/v1/stored/${currentShare.share_id}/notify`, {
       method: 'POST',
+      credentials: 'same-origin',
       headers: {
         'content-type': 'application/json',
         'x-drop2-notify-token': currentShare.email_notify_token,
@@ -270,7 +372,7 @@ function updateSendButton() {
     busy ||
     !selectedFile ||
     selectedFile.size === 0 ||
-    selectedFile.size > ANONYMOUS_BROWSER_SEND_LIMIT;
+    selectedFile.size > maxPlaintextBytes;
 }
 
 function setStatus(text, tone = 'default') {
@@ -325,5 +427,11 @@ async function copyValue(input, button, defaultLabel) {
 function formatBytes(n) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KiB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MiB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MiB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GiB`;
+}
+
+async function apiErrorMessage(res) {
+  const body = await res.json().catch(() => null);
+  return body?.message || body?.error || `Request failed (${res.status})`;
 }
