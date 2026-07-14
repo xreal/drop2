@@ -15,6 +15,7 @@ import {
   uploadManifest,
 } from './stored-share';
 import { validPinMaterial } from './pin';
+import { notifyStoredShare } from './email-notify';
 
 export { LiveShareDO };
 
@@ -98,6 +99,13 @@ export default {
     );
     if (storedComplete && request.method === 'POST') {
       return completeStoredShare(env, storedComplete[1], request);
+    }
+
+    const storedNotify = url.pathname.match(
+      /^\/api\/v1\/stored\/([A-Za-z0-9]{6})\/notify$/,
+    );
+    if (storedNotify && request.method === 'POST') {
+      return notifyStoredShare(env, storedNotify[1], request, url.origin);
     }
 
     const storedDownloadComplete = url.pathname.match(

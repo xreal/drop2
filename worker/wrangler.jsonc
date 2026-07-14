@@ -2,7 +2,7 @@
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "drop2-worker",
   "main": "src/index.ts",
-  "compatibility_date": "2025-05-31",
+  "compatibility_date": "2026-07-14",
   "assets": {
     "directory": "../assets/receiver/dist",
     "binding": "ASSETS",
@@ -36,6 +36,12 @@
     {
       "binding": "STORED",
       "bucket_name": "drop2-stored"
+    }
+  ],
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": ["share@drop2.app"]
     }
   ],
   "triggers": {

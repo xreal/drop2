@@ -31,6 +31,7 @@ import {
   validStoredPolicy,
   type StoredEncryptionMode,
 } from './stored-policy';
+import { createEmailNotifyProof } from './email-notify';
 
 const COOLDOWN_MS = 15 * 60 * 1000;
 const MAX_PIN_FAILURES = 3;
@@ -70,6 +71,8 @@ interface StoredRow {
   max_downloads: number;
   delete_after_complete: number;
   encryption_mode: StoredEncryptionMode;
+  email_notify_token_hash: string;
+  email_recipient_count: number;
 }
 
 export interface CreateStoredBody {
@@ -186,6 +189,7 @@ export async function createStoredShare(
   const shareId = generateShareId();
   const storagePrefix = crypto.randomUUID();
   const uploadToken = crypto.randomUUID();
+  const emailNotify = await createEmailNotifyProof();
   const now = Date.now();
   const expiresAt = now + expiry.expiresSeconds * 1000;
   const manifestKey = objectKey(
@@ -199,8 +203,9 @@ export async function createStoredShare(
       pin_salt, pin_hash, item_kind, display_name, plaintext_size,
       manifest_object_key, chunk_count, chunk_plaintext_size,
       manifest_ciphertext_bytes, ciphertext_bytes_total, upload_token,
-      expiry_mode, max_downloads, delete_after_complete, encryption_mode
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      expiry_mode, max_downloads, delete_after_complete, encryption_mode,
+      email_notify_token_hash
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       shareId,
@@ -223,6 +228,7 @@ export async function createStoredShare(
       maxDownloads,
       expiry.deleteAfterComplete ? 1 : 0,
       encryptionMode,
+      emailNotify.hash,
     )
     .run();
 
@@ -231,6 +237,7 @@ export async function createStoredShare(
     share_url_base: `${origin}/s/${shareId}`,
     storage_prefix: storagePrefix,
     upload_token: uploadToken,
+    email_notify_token: emailNotify.token,
     expires_at: expiresAt,
   });
 }

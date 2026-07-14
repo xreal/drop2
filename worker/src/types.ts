@@ -2,12 +2,7 @@ import type { LiveShareStatus, ShareKind, ShareMode } from './protocol';
 
 export type { ShareKind, ShareMode, LiveShareStatus };
 
-export interface Env {
-  LIVE_SHARE: DurableObjectNamespace;
-  ASSETS: Fetcher;
-  DB: D1Database;
-  STORED: R2Bucket;
-}
+export type Env = Cloudflare.Env;
 
 export interface CreateLiveShareBody {
   kind: ShareKind;

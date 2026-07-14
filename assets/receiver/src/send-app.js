@@ -36,6 +36,15 @@ const sendAnotherEl = document.querySelector('#send-another');
 const trustStripEl = document.querySelector('#trust-strip');
 const securityNoteEl = document.querySelector('#security-note');
 const buttonLabelEl = document.querySelector('#btn-label');
+const emailFormEl = document.querySelector('#email-form');
+const emailRecipientsEl = document.querySelector('#email-recipients');
+const emailMessageEl = document.querySelector('#email-message');
+const emailPinOptionEl = document.querySelector('#email-pin-option');
+const emailSendPinEl = document.querySelector('#email-send-pin');
+const emailStatusEl = document.querySelector('#email-status');
+const emailSubmitEl = document.querySelector('#email-submit');
+const emailCompleteEl = document.querySelector('#email-complete');
+const emailCompleteCopyEl = document.querySelector('#email-complete-copy');
 
 const expiryLabels = {
   after_download: 'It will be deleted after the first completed download.',
@@ -49,6 +58,7 @@ let selectedFile = null;
 let busy = false;
 let previousExpiryMode = '1w';
 let quickModeApplied = false;
+let currentShare = null;
 
 fileInputEl.addEventListener('change', () => selectFile(fileInputEl.files?.[0] ?? null));
 quickLinkEl.addEventListener('change', applyQuickLinkMode);
@@ -104,6 +114,7 @@ formEl.addEventListener('submit', async (event) => {
 copyLinkEl.addEventListener('click', () => copyValue(shareUrlEl, copyLinkEl, 'Copy link'));
 copyPinEl.addEventListener('click', () => copyValue(pinEl, copyPinEl, 'Copy PIN'));
 sendAnotherEl.addEventListener('click', resetForm);
+emailFormEl.addEventListener('submit', sendShareEmail);
 
 function selectFile(file) {
   selectedFile = file;
@@ -134,6 +145,7 @@ function selectFile(file) {
 }
 
 function showSuccess({ result, file, expiryMode, quickLink }) {
+  currentShare = result;
   shareUrlEl.value = result.share_url;
   pinEl.value = result.pin ?? '';
   pinFieldEl.hidden = !result.pin;
@@ -146,6 +158,11 @@ function showSuccess({ result, file, expiryMode, quickLink }) {
   successFileNameEl.textContent = file.name || 'Untitled file';
   successFileSizeEl.textContent = formatBytes(file.size);
   successExpiryEl.textContent = expiryLabels[expiryMode];
+  emailPinOptionEl.hidden = !result.pin;
+  emailSendPinEl.checked = false;
+  emailFormEl.hidden = false;
+  emailCompleteEl.hidden = true;
+  setEmailStatus('');
   uploadCardEl.hidden = true;
   successEl.hidden = false;
   trustStripEl.hidden = true;
@@ -156,6 +173,7 @@ function resetForm() {
   formEl.reset();
   fileInputEl.value = '';
   selectedFile = null;
+  currentShare = null;
   previousExpiryMode = '1w';
   successEl.hidden = true;
   uploadCardEl.hidden = false;
@@ -163,9 +181,73 @@ function resetForm() {
   progressWrapEl.hidden = true;
   progressFillEl.style.width = '0%';
   progressLabelEl.textContent = '';
+  emailFormEl.reset();
+  emailFormEl.hidden = false;
+  emailCompleteEl.hidden = true;
+  setEmailStatus('');
   selectFile(null);
   applyQuickLinkMode();
   uploadCardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function sendShareEmail(event) {
+  event.preventDefault();
+  if (!currentShare?.email_notify_token) {
+    setEmailStatus('Email delivery is unavailable for this share.', 'error');
+    return;
+  }
+
+  const recipients = uniqueRecipients(emailRecipientsEl.value);
+  if (recipients.length < 1 || recipients.length > 5) {
+    setEmailStatus('Enter between 1 and 5 recipient email addresses.', 'error');
+    return;
+  }
+
+  emailSubmitEl.disabled = true;
+  setEmailStatus('Queuing private emails…', 'active');
+  try {
+    const response = await fetch(`/api/v1/stored/${currentShare.share_id}/notify`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-drop2-notify-token': currentShare.email_notify_token,
+      },
+      body: JSON.stringify({
+        recipients,
+        message: emailMessageEl.value,
+        share_url: currentShare.share_url,
+        pin: currentShare.pin ?? undefined,
+        send_pin_separately: Boolean(currentShare.pin && emailSendPinEl.checked),
+      }),
+    });
+    if (!response.ok) throw new Error(await apiErrorMessage(response));
+    const result = await response.json();
+    emailCompleteCopyEl.textContent = result.failed_pin_messages
+      ? `${result.queued_recipients} link emails queued, but ${result.failed_pin_messages} PIN email failed. Share the PIN another way.`
+      : result.failed_recipients
+        ? `${result.queued_recipients} queued; ${result.failed_recipients} could not be queued.`
+        : `${result.queued_recipients} recipient${result.queued_recipients === 1 ? '' : 's'} will receive the link shortly.`;
+    emailFormEl.hidden = true;
+    emailCompleteEl.hidden = false;
+  } catch (err) {
+    setEmailStatus(err.message || 'Email delivery failed. Please try again.', 'error');
+  } finally {
+    emailSubmitEl.disabled = false;
+  }
+}
+
+function uniqueRecipients(raw) {
+  const recipients = raw.split(/[,;\n]+/).map((value) => value.trim()).filter(Boolean);
+  return recipients.filter((value, index) =>
+    recipients.findIndex((candidate) => candidate.toLowerCase() === value.toLowerCase()) === index,
+  );
+}
+
+function setEmailStatus(text, tone = 'default') {
+  emailStatusEl.textContent = text;
+  emailStatusEl.classList.remove('is-error', 'is-active');
+  if (tone === 'error') emailStatusEl.classList.add('is-error');
+  if (tone === 'active') emailStatusEl.classList.add('is-active');
 }
 
 function setBusy(nextBusy) {

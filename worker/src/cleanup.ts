@@ -1,4 +1,5 @@
 import { pruneGlobalIpAbuse, type AccessGuardEnv } from './access-guard';
+import { pruneEmailRateLimits } from './email-rate-limit';
 
 const UPLOAD_STALE_MS = 24 * 60 * 60 * 1000;
 const R2_LIST_LIMIT = 1000;
@@ -18,6 +19,7 @@ export async function runCleanup(env: CleanupEnv): Promise<void> {
   await expireStaleUploads(env);
   await deleteExpiredStoredObjects(env);
   await pruneGlobalIpAbuse(env);
+  await pruneEmailRateLimits(env);
 }
 
 async function expireStaleUploads(env: CleanupEnv): Promise<void> {

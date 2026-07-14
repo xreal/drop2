@@ -93,13 +93,6 @@
                 </label>
                 <div class="option-row is-disabled" aria-disabled="true">
                   <span class="row-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none"><path d="M4 4h16v16H4zM4 7l8 6 8-6" /></svg>
-                  </span>
-                  <span class="row-copy"><strong>Email delivery <em>Coming soon</em></strong><small>Deliver the link without leaving drop2.</small></span>
-                  <span class="toggle"><input type="checkbox" disabled /><span></span></span>
-                </div>
-                <div class="option-row is-disabled" aria-disabled="true">
-                  <span class="row-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
                   </span>
                   <span class="row-copy"><strong>Download notification <em>Coming soon</em></strong><small>Know when your file is received.</small></span>
@@ -150,11 +143,37 @@
               <p id="share-helper" class="helper"></p>
             </div>
           </div>
-          <div class="card preview-card" aria-disabled="true">
-            <span class="heading-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M4 4h16v16H4zM4 7l8 6 8-6" /></svg>
-            </span>
-            <div><strong>Send to recipients <span>Coming soon</span></strong><p>Private email delivery is being built.</p></div>
+          <div class="card email-card">
+            <div class="email-heading">
+              <span class="heading-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M4 4h16v16H4zM4 7l8 6 8-6" /></svg>
+              </span>
+              <div><strong>Send to recipients</strong><p>Each recipient gets a separate private email.</p></div>
+            </div>
+            <form id="email-form" class="email-form">
+              <label class="field" for="email-recipients">
+                <span class="field-label">Recipients</span>
+                <input id="email-recipients" class="control" type="text" autocomplete="off" placeholder="alice@example.com, bob@example.com" required />
+                <small>Up to 5 recipients, separated by commas.</small>
+              </label>
+              <label class="field" for="email-message">
+                <span class="field-label">Message (optional)</span>
+                <textarea id="email-message" class="control" rows="3" maxlength="2000" placeholder="Here’s the file we discussed."></textarea>
+              </label>
+              <label id="email-pin-option" class="pin-email-option" for="email-send-pin" hidden>
+                <input id="email-send-pin" type="checkbox" />
+                <span><strong>Send the PIN in a separate email</strong><small>Off by default. Another channel is safer.</small></span>
+              </label>
+              <p id="email-status" class="status-message" role="status"></p>
+              <div class="email-actions">
+                <small>No tracking pixels. drop2 does not save the email form after sending.</small>
+                <button id="email-submit" type="submit" class="primary-action compact">Deliver link</button>
+              </div>
+            </form>
+            <div id="email-complete" class="email-complete" hidden>
+              <span aria-hidden="true">✓</span>
+              <div><strong>Email queued</strong><p id="email-complete-copy"></p></div>
+            </div>
           </div>
           <button id="send-another" type="button" class="secondary-action another-action">↻ Send another file</button>
         </section>

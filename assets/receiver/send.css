@@ -481,18 +481,73 @@
 .primary-action.compact { min-height: 44px; padding-inline: 1rem; }
 .helper { margin: -0.3rem 0 0; color: var(--muted); font-size: 0.7rem; line-height: 1.5; }
 
-.preview-card {
+.email-heading {
   padding: 1rem 1.2rem;
   display: flex;
   align-items: center;
   gap: 0.8rem;
-  opacity: 0.65;
+  border-bottom: 1px solid var(--border-soft);
 }
 
-.preview-card .heading-icon { width: 2.35rem; height: 2.35rem; }
-.preview-card strong { color: var(--text-soft); font-size: 0.8rem; }
-.preview-card strong span { margin-left: 0.35rem; color: var(--muted); font-size: 0.58rem; letter-spacing: 0.06em; text-transform: uppercase; }
-.preview-card p { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.7rem; }
+.email-heading .heading-icon { width: 2.35rem; height: 2.35rem; }
+.email-heading strong { color: var(--text-soft); font-size: 0.8rem; }
+.email-heading p { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.7rem; }
+
+.email-form {
+  padding: 1.15rem 1.2rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.email-form .control { font-family: inherit; }
+.email-form textarea { resize: vertical; }
+.email-form .field > small,
+.email-actions > small,
+.pin-email-option small { color: var(--muted); font-size: 0.68rem; line-height: 1.4; }
+
+.pin-email-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.pin-email-option input { margin-top: 0.2rem; accent-color: var(--accent); }
+.pin-email-option span { display: flex; flex-direction: column; gap: 0.1rem; }
+.pin-email-option strong { font-size: 0.76rem; }
+
+.email-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.email-actions > small { max-width: 22rem; }
+.email-actions button { flex: 0 0 auto; }
+
+.email-complete {
+  padding: 1.35rem 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.email-complete > span {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--accent-hover);
+  background: var(--accent-soft);
+  font-weight: 800;
+}
+
+.email-complete strong { color: var(--text-soft); font-size: 0.8rem; }
+.email-complete p { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.7rem; }
 .another-action { align-self: flex-start; }
 
 @media (max-width: 600px) {
@@ -510,4 +565,6 @@
   .copy-row button { width: 100%; }
   .file-picker.has-file { flex-wrap: wrap; }
   .ready-chip { margin-left: 3.85rem; }
+  .email-actions { align-items: stretch; flex-direction: column; }
+  .email-actions button { width: 100%; }
 }
