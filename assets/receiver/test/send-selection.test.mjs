@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { selectionFromFiles } from '../src/send-selection.js';
+import { mergeSelections, selectionFromFiles } from '../src/send-selection.js';
 
 function fakeFile(name, contents, webkitRelativePath = '') {
   const bytes = new TextEncoder().encode(contents);
@@ -50,4 +50,39 @@ test('selectionFromFiles packages directory picks as folder.zip', () => {
 
 test('selectionFromFiles rejects empty picks', () => {
   assert.throws(() => selectionFromFiles([fakeFile('empty.txt', '')]), /Empty/);
+});
+
+test('mergeSelections appends dropped files one by one', () => {
+  const first = selectionFromFiles([fakeFile('a.txt', 'a')]);
+  const second = selectionFromFiles([fakeFile('b.txt', 'b')]);
+  const merged = mergeSelections(first, second);
+
+  assert.equal(merged.mode, 'archive');
+  assert.equal(merged.origin, 'files');
+  assert.equal(merged.displayName, 'files.zip');
+  assert.equal(merged.fileCount, 2);
+  assert.deepEqual(
+    merged.entries.map((entry) => entry.path),
+    ['a.txt', 'b.txt'],
+  );
+});
+
+test('mergeSelections keeps appending onto an archive', () => {
+  const start = selectionFromFiles([fakeFile('a.txt', 'a'), fakeFile('b.txt', 'b')]);
+  const merged = mergeSelections(start, selectionFromFiles([fakeFile('c.txt', 'c')]));
+  assert.equal(merged.fileCount, 3);
+  assert.deepEqual(
+    merged.entries.map((entry) => entry.path),
+    ['a.txt', 'b.txt', 'c.txt'],
+  );
+});
+
+test('mergeSelections replaces when a folder is involved', () => {
+  const files = selectionFromFiles([fakeFile('a.txt', 'a')]);
+  const folder = selectionFromFiles(
+    [fakeFile('one.txt', '1', 'docs/one.txt')],
+    { fromDirectory: true },
+  );
+  assert.equal(mergeSelections(files, folder).origin, 'folder');
+  assert.equal(mergeSelections(folder, files).origin, 'file');
 });

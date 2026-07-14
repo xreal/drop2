@@ -4,7 +4,7 @@ import {
   prepareStoredUpload,
   uploadPreparedStoredShare,
 } from './stored-upload.js';
-import { estimateArchiveBytes, selectionFromDataTransfer, selectionFromFiles } from './send-selection.js';
+import { estimateArchiveBytes, mergeSelections, selectionFromDataTransfer, selectionFromFiles } from './send-selection.js';
 
 const formEl = document.querySelector('#send-form');
 const uploadCardEl = document.querySelector('#upload-card');
@@ -119,10 +119,9 @@ for (const eventName of ['dragleave', 'drop']) {
 filePickerEl.addEventListener('drop', async (event) => {
   if (busy) return;
   try {
-    const next = await selectionFromDataTransfer(event.dataTransfer);
-    setSelection(next);
+    const dropped = await selectionFromDataTransfer(event.dataTransfer);
+    setSelection(mergeSelections(selection, dropped));
   } catch (err) {
-    setSelection(null);
     setStatus(err.message || 'Could not read the dropped files.', 'error');
   }
 });

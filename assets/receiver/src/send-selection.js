@@ -9,6 +9,7 @@ import {
  * @typedef {{
  *   mode: 'file' | 'archive',
  *   kind: 'file' | 'folder',
+ *   origin: 'file' | 'files' | 'folder',
  *   displayName: string,
  *   summary: string,
  *   contentBytes: number,
@@ -30,6 +31,7 @@ export function selectionFromFiles(fileList, { fromDirectory = false } = {}) {
     return {
       mode: 'file',
       kind: 'file',
+      origin: 'file',
       displayName: file.name || 'download',
       summary: '',
       contentBytes: file.size,
@@ -51,33 +53,36 @@ export function selectionFromFiles(fileList, { fromDirectory = false } = {}) {
       path: paths[index],
       blob: file,
     }));
-    const contentBytes = entries.reduce((sum, entry) => sum + entry.blob.size, 0);
-    return {
-      mode: 'archive',
-      kind: 'folder',
+    return archiveSelection(entries, {
+      origin: 'folder',
       displayName: `${root}.zip`,
-      summary: `${files.length} file${files.length === 1 ? '' : 's'}`,
-      contentBytes,
-      fileCount: files.length,
-      entries,
-    };
+    });
   }
 
-  const paths = uniqueArchivePaths(files.map((file) => file.name || 'file'));
-  const entries = files.map((file, index) => ({
-    path: paths[index],
-    blob: file,
-  }));
-  const contentBytes = entries.reduce((sum, entry) => sum + entry.blob.size, 0);
-  return {
-    mode: 'archive',
-    kind: 'folder',
+  return archiveSelection(
+    files.map((file) => ({
+      path: file.name || 'file',
+      blob: file,
+    })),
+    { origin: 'files', displayName: 'files.zip' },
+  );
+}
+
+/**
+ * Merge a new drop/pick into an existing selection.
+ * Loose files append; folder selections replace.
+ */
+export function mergeSelections(existing, incoming) {
+  if (!existing) return incoming;
+  if (!incoming) return existing;
+  if (incoming.origin === 'folder' || existing.origin === 'folder') {
+    return incoming;
+  }
+
+  return archiveSelection([...flatEntries(existing), ...flatEntries(incoming)], {
+    origin: 'files',
     displayName: 'files.zip',
-    summary: `${files.length} files`,
-    contentBytes,
-    fileCount: files.length,
-    entries,
-  };
+  });
 }
 
 /** Collect a send selection from a drag-and-drop DataTransfer. */
@@ -110,33 +115,16 @@ export async function selectionFromDataTransfer(dataTransfer) {
         path: normalizeArchivePath(`${root}/${item.path}`),
         blob: item.blob,
       }));
-      const contentBytes = entries.reduce((sum, entry) => sum + entry.blob.size, 0);
-      return {
-        mode: 'archive',
-        kind: 'folder',
+      return archiveSelection(entries, {
+        origin: 'folder',
         displayName: `${root}.zip`,
-        summary: `${entries.length} file${entries.length === 1 ? '' : 's'}`,
-        contentBytes,
-        fileCount: entries.length,
-        entries,
-      };
+      });
     }
 
-    const paths = uniqueArchivePaths(collected.map((item) => item.path));
-    const entries = collected.map((item, index) => ({
-      path: paths[index],
-      blob: item.blob,
-    }));
-    const contentBytes = entries.reduce((sum, entry) => sum + entry.blob.size, 0);
-    return {
-      mode: 'archive',
-      kind: 'folder',
-      displayName: 'files.zip',
-      summary: `${entries.length} files`,
-      contentBytes,
-      fileCount: entries.length,
-      entries,
-    };
+    return archiveSelection(
+      collected.map((item) => ({ path: item.path, blob: item.blob })),
+      { origin: 'files', displayName: 'files.zip' },
+    );
   }
 
   return selectionFromFiles(dataTransfer?.files);
@@ -152,6 +140,40 @@ export function estimateArchiveBytes(selection) {
     overhead += 76 + nameLen * 2;
   }
   return selection.contentBytes + overhead;
+}
+
+function archiveSelection(rawEntries, { origin, displayName }) {
+  if (rawEntries.length === 0) {
+    throw new Error('Empty files are not supported yet.');
+  }
+  if (rawEntries.length > BROWSER_ZIP_MAX_ENTRIES) {
+    throw new Error(`Folders are limited to ${BROWSER_ZIP_MAX_ENTRIES} files in the browser.`);
+  }
+
+  const paths = uniqueArchivePaths(rawEntries.map((entry) => entry.path || 'file'));
+  const entries = rawEntries.map((entry, index) => ({
+    path: paths[index],
+    blob: entry.blob,
+  }));
+  const contentBytes = entries.reduce((sum, entry) => sum + entry.blob.size, 0);
+  const fileCount = entries.length;
+  return {
+    mode: 'archive',
+    kind: 'folder',
+    origin,
+    displayName,
+    summary: `${fileCount} file${fileCount === 1 ? '' : 's'}`,
+    contentBytes,
+    fileCount,
+    entries,
+  };
+}
+
+function flatEntries(selection) {
+  if (selection.mode === 'file' && selection.file) {
+    return [{ path: selection.file.name || 'file', blob: selection.file }];
+  }
+  return [...(selection.entries ?? [])];
 }
 
 async function walkFsEntry(entry, prefix, out) {
