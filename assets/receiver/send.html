@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Send a file with an encrypted link or a short, PIN-protected quick link. No account needed." />
+    <meta name="description" content="Send files or folders with an encrypted link, or a short PIN-protected quick link for a single file. No account needed." />
     <title>drop2.app — send files simply</title>
     <link rel="stylesheet" href="/assets/styles.css" />
     <link rel="stylesheet" href="/assets/send.css" />
@@ -46,24 +46,29 @@
               <svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0L8 8m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
             </span>
             <div>
-              <h2 id="send-title">Send a file</h2>
+              <h2 id="send-title">Send files</h2>
               <p id="send-limit-copy">Up to 10 MiB anonymously. Sign in with GitHub for up to 1 GiB.</p>
             </div>
           </div>
 
           <form id="send-form" class="send-form">
-            <label id="file-picker" class="file-picker" for="file-input">
-              <input id="file-input" type="file" class="visually-hidden" />
+            <div id="file-picker" class="file-picker" tabindex="0" role="button" aria-controls="file-input">
+              <input id="file-input" type="file" class="visually-hidden" multiple />
+              <input id="folder-input" type="file" class="visually-hidden" webkitdirectory directory multiple />
               <span class="picker-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0L8 8m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
               </span>
               <span class="picker-copy">
-                <strong id="file-name">Choose a file</strong>
-                <span id="file-summary">or drag and drop it here</span>
+                <strong id="file-name">Choose files or a folder</strong>
+                <span id="file-summary">or drag and drop them here</span>
               </span>
               <span id="file-ready" class="ready-chip" hidden>Ready</span>
               <span id="file-change" class="change-label" hidden>Change</span>
-            </label>
+            </div>
+            <div class="picker-actions">
+              <button id="choose-files" type="button" class="secondary-action compact">Choose files</button>
+              <button id="choose-folder" type="button" class="secondary-action compact">Choose folder</button>
+            </div>
 
             <fieldset class="option-group">
               <legend>

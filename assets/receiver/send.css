@@ -166,6 +166,13 @@
 
 .has-file .picker-copy strong { margin-top: 0; }
 
+.picker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: -0.45rem;
+}
+
 .picker-copy span {
   margin-top: 0.25rem;
   color: var(--muted);
@@ -341,7 +348,7 @@
 .row-copy strong { color: var(--text-soft); font-size: 0.78rem; }
 .row-copy small { margin-top: 0.15rem; color: var(--muted); font-size: 0.7rem; line-height: 1.35; }
 .row-copy em { margin-left: 0.35rem; color: var(--muted-light); font-size: 0.58rem; font-style: normal; letter-spacing: 0.06em; text-transform: uppercase; }
-.is-disabled { opacity: 0.58; }
+.is-disabled { opacity: 0.58; pointer-events: none; }
 
 .toggle {
   position: relative;

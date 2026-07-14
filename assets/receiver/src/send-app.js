@@ -4,11 +4,15 @@ import {
   prepareStoredUpload,
   uploadPreparedStoredShare,
 } from './stored-upload.js';
+import { estimateArchiveBytes, selectionFromDataTransfer, selectionFromFiles } from './send-selection.js';
 
 const formEl = document.querySelector('#send-form');
 const uploadCardEl = document.querySelector('#upload-card');
 const filePickerEl = document.querySelector('#file-picker');
 const fileInputEl = document.querySelector('#file-input');
+const folderInputEl = document.querySelector('#folder-input');
+const chooseFilesEl = document.querySelector('#choose-files');
+const chooseFolderEl = document.querySelector('#choose-folder');
 const fileNameEl = document.querySelector('#file-name');
 const fileSummaryEl = document.querySelector('#file-summary');
 const fileReadyEl = document.querySelector('#file-ready');
@@ -60,7 +64,8 @@ const expiryLabels = {
   quick: 'It will be deleted after the first completed download or within two hours.',
 };
 
-let selectedFile = null;
+/** @type {import('./send-selection.js').SendSelection | null} */
+let selection = null;
 let busy = false;
 let previousExpiryMode = '1w';
 let quickModeApplied = false;
@@ -68,7 +73,32 @@ let currentShare = null;
 let maxPlaintextBytes = ANONYMOUS_BROWSER_SEND_LIMIT;
 let authSession = null;
 
-fileInputEl.addEventListener('change', () => selectFile(fileInputEl.files?.[0] ?? null));
+fileInputEl.addEventListener('change', () => {
+  applySelectionSafe(() => selectionFromFiles(fileInputEl.files));
+  fileInputEl.value = '';
+});
+folderInputEl.addEventListener('change', () => {
+  applySelectionSafe(() => selectionFromFiles(folderInputEl.files, { fromDirectory: true }));
+  folderInputEl.value = '';
+});
+chooseFilesEl?.addEventListener('click', () => {
+  if (!busy) fileInputEl.click();
+});
+chooseFolderEl?.addEventListener('click', () => {
+  if (!busy) folderInputEl.click();
+});
+filePickerEl.addEventListener('click', (event) => {
+  if (busy) return;
+  if (event.target.closest('button')) return;
+  fileInputEl.click();
+});
+filePickerEl.addEventListener('keydown', (event) => {
+  if (busy) return;
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    fileInputEl.click();
+  }
+});
 quickLinkEl.addEventListener('change', applyQuickLinkMode);
 authSignoutEl?.addEventListener('click', signOut);
 
@@ -86,26 +116,46 @@ for (const eventName of ['dragleave', 'drop']) {
   });
 }
 
-filePickerEl.addEventListener('drop', (event) => {
-  if (!busy) selectFile(event.dataTransfer?.files?.[0] ?? null);
+filePickerEl.addEventListener('drop', async (event) => {
+  if (busy) return;
+  try {
+    const next = await selectionFromDataTransfer(event.dataTransfer);
+    setSelection(next);
+  } catch (err) {
+    setSelection(null);
+    setStatus(err.message || 'Could not read the dropped files.', 'error');
+  }
 });
 
 formEl.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const file = selectedFile;
-  if (!file || file.size > maxPlaintextBytes || file.size === 0) return;
+  if (!selection || selectionSize(selection) === 0 || selectionSize(selection) > maxPlaintextBytes) {
+    return;
+  }
 
   const expiryMode = expiryEls.find((input) => input.checked)?.value ?? '1w';
+  const archive = selection.mode === 'archive';
+  let quickLink = quickLinkEl.checked;
+  if (archive && quickLink) {
+    quickLinkEl.checked = false;
+    applyQuickLinkMode();
+    quickLink = false;
+  }
+
   setBusy(true);
   successEl.hidden = true;
 
   try {
-    const quickLink = quickLinkEl.checked;
-    setStatus(quickLink ? 'Preparing file…' : 'Encrypting in your browser…', 'active');
-    const prepared = await prepareStoredUpload(file, {
+    if (archive) setStatus('Packaging…', 'active');
+    else setStatus(quickLink ? 'Preparing file…' : 'Encrypting in your browser…', 'active');
+
+    const prepared = await prepareStoredUpload(selection.file ?? new Blob(), {
       expiryMode,
       pinRequired: pinRequiredEl.checked,
       quickLink,
+      kind: selection.kind,
+      displayName: selection.displayName,
+      zipEntries: archive ? selection.entries : null,
       maxPlaintextBytes,
       onProgress: updateProgress,
     });
@@ -113,7 +163,13 @@ formEl.addEventListener('submit', async (event) => {
     setStatus(quickLink ? 'Uploading file…' : 'Uploading encrypted data…', 'active');
     const result = await uploadPreparedStoredShare(prepared, { onProgress: updateProgress });
 
-    showSuccess({ result, file, expiryMode: prepared.expiryMode, quickLink });
+    showSuccess({
+      result,
+      displayName: prepared.fileName,
+      size: prepared.size,
+      expiryMode: prepared.expiryMode,
+      quickLink,
+    });
     await refreshAuthSession();
   } catch (err) {
     setStatus(err.message || 'Upload failed. Please try again.', 'error');
@@ -137,7 +193,7 @@ async function bootAuth() {
     setStatus('Signed in. You can send files up to 1 GiB.', 'active');
   } else if (authFlag === 'ineligible') {
     setStatus(
-      'Signed in, but this GitHub account is not eligible for large sends yet (180+ days old and at least 2 public repos).',
+      'Signed in, but this GitHub account is not eligible for large sends yet (180+ days old and at least 2 public repositories).',
       'error',
     );
   } else if (authFlag === 'suspended') {
@@ -181,7 +237,7 @@ function applyAuthSession() {
   if (sendLimitCopyEl) {
     if (signedIn && eligible) {
       sendLimitCopyEl.textContent =
-        'Signed in. Up to 1 GiB per file (1.2 GiB/day, 2 GiB/week).';
+        'Signed in. Up to 1 GiB per send (1.2 GiB/day, 2 GiB/week).';
     } else if (signedIn) {
       sendLimitCopyEl.textContent =
         'Signed in. Large sends need a GitHub account at least 180 days old with 2+ public repos.';
@@ -191,7 +247,7 @@ function applyAuthSession() {
     }
   }
 
-  if (selectedFile) selectFile(selectedFile);
+  if (selection) setSelection(selection);
   else updateSendButton();
 }
 
@@ -206,46 +262,82 @@ async function signOut() {
   setStatus('Signed out.', 'active');
 }
 
-function selectFile(file) {
-  selectedFile = file;
-  setStatus('');
-  filePickerEl.classList.toggle('has-file', Boolean(file));
-  fileReadyEl.hidden = !file;
-  fileChangeEl.hidden = !file;
+function applySelectionSafe(factory) {
+  try {
+    setSelection(factory());
+  } catch (err) {
+    setSelection(null);
+    setStatus(err.message || 'Could not read the selected files.', 'error');
+  }
+}
 
-  if (!file) {
-    fileNameEl.textContent = 'Choose a file';
-    fileSummaryEl.textContent = 'or drag and drop it here';
+function setSelection(next) {
+  selection = next;
+  setStatus('');
+  filePickerEl.classList.toggle('has-file', Boolean(next));
+  fileReadyEl.hidden = !next;
+  fileChangeEl.hidden = !next;
+  applyArchiveQuickLinkLock();
+
+  if (!next) {
+    fileNameEl.textContent = 'Choose files or a folder';
+    fileSummaryEl.textContent = 'or drag and drop them here';
     updateSendButton();
     return;
   }
 
-  fileNameEl.textContent = file.name || 'Untitled file';
-  fileSummaryEl.textContent = formatBytes(file.size);
+  fileNameEl.textContent = next.displayName;
+  const sizeBytes = selectionSize(next);
+  const parts = [formatBytes(sizeBytes)];
+  if (next.summary) parts.unshift(next.summary);
+  if (next.mode === 'archive') parts.push('will be sent as a zip');
+  fileSummaryEl.textContent = parts.join(' · ');
 
-  if (file.size > maxPlaintextBytes) {
+  if (sizeBytes > maxPlaintextBytes) {
     const limitLabel =
       maxPlaintextBytes <= ANONYMOUS_BROWSER_SEND_LIMIT ? '10 MiB' : '1 GiB';
     fileSummaryEl.textContent += ` · exceeds the ${limitLabel} limit`;
     fileReadyEl.hidden = true;
     if (maxPlaintextBytes <= ANONYMOUS_BROWSER_SEND_LIMIT && !authSession?.signed_in) {
-      setStatus('Sign in with GitHub to send files larger than 10 MiB (up to 1 GiB).', 'error');
+      setStatus('Sign in with GitHub to send more than 10 MiB (up to 1 GiB).', 'error');
     } else if (authSession?.signed_in && !authSession?.eligible) {
       setStatus(
         'This GitHub account is not eligible for large sends (180+ days and 2+ public repos).',
         'error',
       );
     } else {
-      setStatus(`Choose a file no larger than ${limitLabel}.`, 'error');
+      setStatus(`Choose content no larger than ${limitLabel}.`, 'error');
     }
-  } else if (file.size === 0) {
+  } else if (sizeBytes === 0) {
     fileReadyEl.hidden = true;
     setStatus('Empty files are not supported yet.', 'error');
   }
   updateSendButton();
 }
 
-function showSuccess({ result, file, expiryMode, quickLink }) {
+function applyArchiveQuickLinkLock() {
+  const archive = selection?.mode === 'archive';
+  if (archive && quickLinkEl.checked) {
+    quickLinkEl.checked = false;
+    applyQuickLinkMode();
+  }
+  quickLinkEl.disabled = busy || Boolean(archive);
+  const row = quickLinkEl.closest('.option-row');
+  row?.classList.toggle('is-disabled', Boolean(archive));
+  row?.setAttribute('aria-disabled', String(Boolean(archive)));
+  if (archive) {
+    const small = row?.querySelector('small');
+    if (small) {
+      small.dataset.defaultCopy ??= small.textContent;
+      small.textContent = 'Quick links are only available for a single file.';
+    }
+  } else {
+    const small = row?.querySelector('small');
+    if (small?.dataset.defaultCopy) small.textContent = small.dataset.defaultCopy;
+  }
+}
+
+function showSuccess({ result, displayName, size, expiryMode, quickLink }) {
   currentShare = result;
   shareUrlEl.value = result.share_url;
   pinEl.value = result.pin ?? '';
@@ -254,10 +346,10 @@ function showSuccess({ result, file, expiryMode, quickLink }) {
   shareHelperEl.textContent = quickLink
     ? 'This short link is not end-to-end encrypted. Send its required PIN separately.'
     : result.pin
-    ? 'Send the PIN separately from the link for an extra access gate.'
-    : 'Anyone with the full link can access and decrypt the file until it expires.';
-  successFileNameEl.textContent = file.name || 'Untitled file';
-  successFileSizeEl.textContent = formatBytes(file.size);
+      ? 'Send the PIN separately from the link for an extra access gate.'
+      : 'Anyone with the full link can access and decrypt the file until it expires.';
+  successFileNameEl.textContent = displayName || 'Untitled file';
+  successFileSizeEl.textContent = formatBytes(size);
   successExpiryEl.textContent = expiryLabels[expiryMode];
   emailPinOptionEl.hidden = !result.pin;
   emailSendPinEl.checked = false;
@@ -273,7 +365,8 @@ function showSuccess({ result, file, expiryMode, quickLink }) {
 function resetForm() {
   formEl.reset();
   fileInputEl.value = '';
-  selectedFile = null;
+  folderInputEl.value = '';
+  selection = null;
   currentShare = null;
   previousExpiryMode = '1w';
   successEl.hidden = true;
@@ -286,7 +379,7 @@ function resetForm() {
   emailFormEl.hidden = false;
   emailCompleteEl.hidden = true;
   setEmailStatus('');
-  selectFile(null);
+  setSelection(null);
   applyQuickLinkMode();
   uploadCardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -355,10 +448,13 @@ function setEmailStatus(text, tone = 'default') {
 function setBusy(nextBusy) {
   busy = nextBusy;
   fileInputEl.disabled = nextBusy;
-  quickLinkEl.disabled = nextBusy;
+  folderInputEl.disabled = nextBusy;
+  chooseFilesEl && (chooseFilesEl.disabled = nextBusy);
+  chooseFolderEl && (chooseFolderEl.disabled = nextBusy);
   pinRequiredEl.disabled = nextBusy || quickLinkEl.checked;
   for (const input of expiryEls) input.disabled = nextBusy || quickLinkEl.checked;
   progressWrapEl.hidden = !nextBusy;
+  applyArchiveQuickLinkLock();
   updateSendButton();
 
   if (!nextBusy) {
@@ -368,11 +464,16 @@ function setBusy(nextBusy) {
 }
 
 function updateSendButton() {
+  const sizeBytes = selection ? selectionSize(selection) : 0;
   sendButtonEl.disabled =
     busy ||
-    !selectedFile ||
-    selectedFile.size === 0 ||
-    selectedFile.size > maxPlaintextBytes;
+    !selection ||
+    sizeBytes === 0 ||
+    sizeBytes > maxPlaintextBytes;
+}
+
+function selectionSize(next) {
+  return estimateArchiveBytes(next);
 }
 
 function setStatus(text, tone = 'default') {
@@ -385,8 +486,19 @@ function setStatus(text, tone = 'default') {
 function updateProgress({ phase, done, total }) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
   progressFillEl.style.width = `${pct}%`;
-  const verb = phase === 'encrypt' ? 'Encrypted' : phase === 'prepare' ? 'Prepared' : 'Uploaded';
+  const verb =
+    phase === 'package'
+      ? 'Packaged'
+      : phase === 'encrypt'
+        ? 'Encrypted'
+        : phase === 'prepare'
+          ? 'Prepared'
+          : 'Uploaded';
   progressLabelEl.textContent = `${verb} ${pct}%`;
+  if (phase === 'package') setStatus('Packaging…', 'active');
+  else if (phase === 'encrypt') setStatus('Encrypting in your browser…', 'active');
+  else if (phase === 'prepare') setStatus('Preparing file…', 'active');
+  else if (phase === 'upload') setStatus('Uploading encrypted data…', 'active');
 }
 
 function applyQuickLinkMode() {
@@ -409,6 +521,7 @@ function applyQuickLinkMode() {
     ? ' PIN protected. Not end-to-end encrypted; access expires within 2 hours.'
     : ' End-to-end encrypted and never analyzed.';
   buttonLabelEl.textContent = quickLink ? 'Create quick link' : 'Send securely';
+  applyArchiveQuickLinkLock();
 }
 
 async function copyValue(input, button, defaultLabel) {

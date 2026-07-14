@@ -54,3 +54,35 @@ test('prepareStoredUpload rejects files over the configured max', async () => {
     /limited/,
   );
 });
+
+test('prepareStoredUpload packages zip entries as kind folder', async () => {
+  const prepared = await prepareStoredUpload(new Blob(), {
+    kind: 'folder',
+    displayName: 'files.zip',
+    zipEntries: [
+      { path: 'a.txt', blob: new Blob([new TextEncoder().encode('alpha')]) },
+      { path: 'b.txt', blob: new Blob([new TextEncoder().encode('beta')]) },
+    ],
+    maxPlaintextBytes: 1024 * 1024,
+  });
+
+  assert.equal(prepared.kind, 'folder');
+  assert.equal(prepared.fileName, 'files.zip');
+  assert.equal(prepared.createBody.kind, 'folder');
+  assert.equal(prepared.createBody.name, 'files.zip');
+  assert.equal(prepared.createBody.encryption_mode, 'end_to_end');
+  assert.ok(prepared.size > 0);
+});
+
+test('prepareStoredUpload rejects quick links for folders', async () => {
+  await assert.rejects(
+    () =>
+      prepareStoredUpload(new Blob(), {
+        quickLink: true,
+        kind: 'folder',
+        displayName: 'files.zip',
+        zipEntries: [{ path: 'a.txt', blob: new Blob([new TextEncoder().encode('a')]) }],
+      }),
+    /Quick links are only available for single files/,
+  );
+});

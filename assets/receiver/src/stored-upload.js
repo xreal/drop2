@@ -5,22 +5,55 @@ import {
   generateStoredMaterial,
 } from './stored-crypto.js';
 import { generatePin, hashPin } from './pin.js';
+import { buildStoreZip } from './zip-store.js';
 
 export const STORED_CHUNK_PLAINTEXT_SIZE = 8 * 1024 * 1024;
 export const ANONYMOUS_BROWSER_SEND_LIMIT = 10 * 1024 * 1024;
 export const AUTHENTICATED_BROWSER_SEND_LIMIT = 1024 * 1024 * 1024;
 
+/**
+ * @param {Blob & { name?: string }} file
+ * @param {{
+ *   expiryMode?: string,
+ *   pinRequired?: boolean,
+ *   quickLink?: boolean,
+ *   kind?: 'file' | 'folder',
+ *   displayName?: string,
+ *   zipEntries?: Array<{ path: string, blob: Blob }>,
+ *   maxPlaintextBytes?: number,
+ *   onProgress?: Function,
+ * }} [options]
+ */
 export async function prepareStoredUpload(
   file,
   {
     expiryMode = '1w',
     pinRequired = true,
     quickLink = false,
+    kind = 'file',
+    displayName,
+    zipEntries = null,
     maxPlaintextBytes = ANONYMOUS_BROWSER_SEND_LIMIT,
     onProgress,
   } = {},
 ) {
-  if (file.size > maxPlaintextBytes) {
+  let uploadFile = file;
+  let shareKind = kind === 'folder' ? 'folder' : 'file';
+
+  if (zipEntries?.length) {
+    shareKind = 'folder';
+    uploadFile = await buildStoreZip(zipEntries, {
+      archiveName: displayName || file?.name || 'files.zip',
+      maxBytes: maxPlaintextBytes,
+      onProgress,
+    });
+  }
+
+  if (quickLink && shareKind === 'folder') {
+    throw new Error('Quick links are only available for single files.');
+  }
+
+  if (uploadFile.size > maxPlaintextBytes) {
     throw new Error(
       maxPlaintextBytes <= ANONYMOUS_BROWSER_SEND_LIMIT
         ? 'Anonymous browser sends are limited to 10 MiB for now.'
@@ -36,26 +69,27 @@ export async function prepareStoredUpload(
   let readBytes = 0;
   let index = 0;
 
-  for (let offset = 0; offset < file.size; offset += STORED_CHUNK_PLAINTEXT_SIZE) {
-    const slice = file.slice(offset, offset + STORED_CHUNK_PLAINTEXT_SIZE);
+  for (let offset = 0; offset < uploadFile.size; offset += STORED_CHUNK_PLAINTEXT_SIZE) {
+    const slice = uploadFile.slice(offset, offset + STORED_CHUNK_PLAINTEXT_SIZE);
     const plain = new Uint8Array(await slice.arrayBuffer());
     const stored = quickLink ? plain : encryptFrame(plain, material.dek, index);
     chunks.push(stored);
     ciphertextBytesTotal += stored.length;
     readBytes += plain.length;
     index += 1;
-    onProgress?.({ phase: quickLink ? 'prepare' : 'encrypt', done: readBytes, total: file.size });
+    onProgress?.({ phase: quickLink ? 'prepare' : 'encrypt', done: readBytes, total: uploadFile.size });
   }
 
-  if (file.size === 0) {
+  if (uploadFile.size === 0) {
     throw new Error('Empty files are not supported yet.');
   }
 
+  const name = displayName || uploadFile.name || (shareKind === 'folder' ? 'files.zip' : 'download');
   const manifest = {
     v: 1,
-    kind: 'file',
-    display_name: file.name || 'download',
-    plaintext_size: file.size,
+    kind: shareKind,
+    display_name: name,
+    plaintext_size: uploadFile.size,
     chunk_count: chunks.length,
     chunk_plaintext_size: STORED_CHUNK_PLAINTEXT_SIZE,
     ...(quickLink
@@ -69,16 +103,17 @@ export async function prepareStoredUpload(
 
   return {
     fileName: manifest.display_name,
-    size: file.size,
+    size: uploadFile.size,
+    kind: shareKind,
     expiryMode: quickLink ? 'quick' : expiryMode,
     pin,
     capability: material?.capability ?? null,
     manifest: storedManifest,
     chunks,
     createBody: {
-      kind: 'file',
+      kind: shareKind,
       name: manifest.display_name,
-      size: file.size,
+      size: uploadFile.size,
       expiry_mode: quickLink ? 'quick' : expiryMode,
       max_downloads: 20,
       encryption_mode: quickLink ? 'none' : 'end_to_end',
