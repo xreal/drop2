@@ -6,10 +6,13 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "node --test src/*.test.mjs",
+    "test:live": "cargo build -p drop2-cli --manifest-path ../Cargo.toml && node --test test/live-transfer.test.mjs",
     "types": "wrangler types",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "esbuild": "0.28.1",
+    "miniflare": "4.20260708.1",
     "typescript": "^5.8.3",
     "wrangler": "^4.110.0"
   }

@@ -30,11 +30,13 @@ export interface LiveShareInfoResponse {
 
 export interface LiveAccessBody {
   client_public_key: string;
+  client_proof: string;
   pin?: string;
 }
 
 export interface LiveAccessResponse {
   server_public_key: string;
+  server_proof: string;
   join_token: string;
   connect_url: string;
   status: LiveShareStatus;
@@ -58,5 +60,6 @@ export interface CreateLiveShareResult {
 
 export interface JoinAdmissionResult {
   server_public_key: string;
+  server_proof: string;
   join_token: string;
 }

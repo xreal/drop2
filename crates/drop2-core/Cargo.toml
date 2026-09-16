@@ -15,9 +15,9 @@ drop2-local = { path = "../drop2-local" }
 drop2-protocol = { path = "../drop2-protocol" }
 drop2-transfer = { path = "../drop2-transfer" }
 thiserror.workspace = true
+tempfile = "3.20"
 tokio = { workspace = true, features = ["sync", "time"] }
 url = "2.5"
 
 [dev-dependencies]
-tempfile = "3.20"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

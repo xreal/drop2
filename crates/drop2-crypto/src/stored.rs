@@ -45,6 +45,10 @@ impl CapabilitySecret {
         URL_SAFE_NO_PAD.encode(self.0.as_ref())
     }
 
+    pub(crate) fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+
     fn manifest_key(&self) -> Zeroizing<[u8; 32]> {
         let hk = Hkdf::<Sha256>::new(None, self.0.as_ref());
         let mut okm = Zeroizing::new([0u8; 32]);

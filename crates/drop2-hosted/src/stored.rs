@@ -25,7 +25,7 @@ pub struct StoredUploadResult {
 
 pub async fn upload_stored_share(
     config: &ApiConfig,
-    input: ShareInput,
+    mut input: ShareInput,
     pin: Option<Pin>,
     expires_seconds: u64,
 ) -> Result<StoredUploadResult, HostedError> {
@@ -40,6 +40,8 @@ pub async fn upload_stored_share(
 
     let chunk_count = chunks.len() as u32;
     let ciphertext_bytes_total: u64 = chunks.iter().map(|c| c.len() as u64).sum();
+    // The stored plaintext is the actual emitted stream, including ZIP headers for folders.
+    input.size = ciphertext_bytes_total - chunks.len() as u64 * 20;
 
     let stored_kind = match input.kind {
         InputKind::File => StoredKind::File,

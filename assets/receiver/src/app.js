@@ -173,6 +173,11 @@ async function main() {
     const ctx = detectShareContext();
     const info = await loadShareInfo(ctx);
     quickLink = info.mode === 'stored' && info.encryption_mode === 'none';
+    if (ctx.mode === 'hosted' && info.mode === 'live' && ctx.capability?.length !== 32) {
+      setStatus('Open the complete live share link, including the secret after #.', 'error');
+      setUiPhase('unavailable');
+      return;
+    }
     if (quickLink) {
       privacyCopyEl.textContent =
         'This quick share is not end-to-end encrypted. The required PIN controls access.';

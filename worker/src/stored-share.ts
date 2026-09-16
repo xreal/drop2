@@ -1,6 +1,5 @@
 import type { ShareKind, StoredShareStatus } from './protocol';
 import { verifyPin, pinRequired, validPinMaterial } from './pin';
-import { pruneAbuseTracking, recordFailedPin } from './abuse-tracking';
 import { generateShareId, isValidShareId } from './share-id';
 import {
   accessDenied,
@@ -11,33 +10,31 @@ import {
   jsonError,
   ErrorMsg,
 } from './api-errors';
-import { hashIp, clientIp } from './ip-hash';
 import {
-  clearGlobalAccessFailures,
-  globalIpBlocked,
-  recordGlobalAccessFailure,
+  reservePinAttempt,
+  releasePinAttempt,
   type AccessGuardEnv,
 } from './access-guard';
 import {
-  exceedsCiphertextBudget,
-  maxChunkCiphertextBytes as calcMaxChunkCiphertextBytes,
-  maxChunkCiphertextSizeForRow as calcMaxChunkCiphertextSizeForRow,
-  MAX_CHUNK_PLAINTEXT_BYTES,
+  validStoredLayout,
+  storedChunkBytes,
+  MAX_MANIFEST_BYTES,
   validateReadyTotals,
 } from './stored-limits';
 import { resolveExpiry } from './stored-expiry';
 import {
-  validPlaintextStorageSize,
   validStoredPolicy,
   type StoredEncryptionMode,
 } from './stored-policy';
 import { createEmailNotifyProof } from './email-notify';
 import { evaluateBrowserSendSize } from './auth-limits';
-import { evaluateQuota, loadQuotaUsage, recordUsageEvent } from './auth-quota';
+import {
+  evaluateQuota, loadQuotaUsage, finalizeStoredUpload, QUOTA_TOTAL_SQL,
+  startOfUtcDay, weekWindowStart, DAILY_QUOTA_BYTES, WEEKLY_QUOTA_BYTES,
+} from './auth-quota';
 import { resolveSession } from './auth-session';
+import { readBoundedBytes, readJsonObject } from './request-body';
 
-const COOLDOWN_MS = 15 * 60 * 1000;
-const MAX_PIN_FAILURES = 3;
 const DOWNLOAD_TOKEN_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_DOWNLOADS = 20;
 
@@ -65,8 +62,6 @@ interface StoredRow {
   upload_token: string;
   download_token: string | null;
   download_token_expires_at: number | null;
-  failed_pins: string;
-  cooldown_until: string;
   download_count: number;
   last_access_at: number | null;
   expiry_mode: string;
@@ -118,32 +113,7 @@ export async function createStoredShare(
   if (!validPinMaterial(body.pin_salt, body.pin_hash)) {
     return jsonError('invalid pin material', 400);
   }
-  if (
-    !Number.isInteger(body.chunk_count) ||
-    body.chunk_count < 1 ||
-    body.chunk_count > 10_000
-  ) {
-    return jsonError('invalid chunk count', 400);
-  }
-  if (
-    !Number.isInteger(body.chunk_plaintext_size) ||
-    body.chunk_plaintext_size < 1 ||
-    body.chunk_plaintext_size > MAX_CHUNK_PLAINTEXT_BYTES
-  ) {
-    return jsonError('invalid chunk size', 400);
-  }
-  if (
-    !Number.isInteger(body.manifest_ciphertext_bytes) ||
-    body.manifest_ciphertext_bytes < 1
-  ) {
-    return jsonError('invalid manifest size', 400);
-  }
-  if (
-    !Number.isInteger(body.ciphertext_bytes_total) ||
-    body.ciphertext_bytes_total < body.manifest_ciphertext_bytes
-  ) {
-    return jsonError('invalid ciphertext total', 400);
-  }
+  if (!validStoredLayout(body)) return jsonError('invalid storage layout', 400);
 
   const expiry = resolveExpiry(body);
   if (!expiry) {
@@ -170,49 +140,36 @@ export async function createStoredShare(
   ) {
     return jsonError('invalid storage policy', 400);
   }
-  if (
-    !validPlaintextStorageSize(
-      encryptionMode,
-      body.size,
-      body.manifest_ciphertext_bytes,
-      body.ciphertext_bytes_total,
-    )
-  ) {
-    return jsonError('invalid plaintext storage size', 400);
+  const session = request ? await resolveSession(env.DB, request) : null;
+  let quota = null;
+  if (session && session.account.eligible === 1) {
+    const usage = await loadQuotaUsage(env.DB, session.account.account_id);
+    quota = evaluateQuota(usage, body.size);
   }
-  let accountId: string | null = null;
-  if (isBrowserSend(body)) {
-    const session = request ? await resolveSession(env.DB, request) : null;
-    let quota = null;
-    if (session && session.account.eligible === 1) {
-      const usage = await loadQuotaUsage(env.DB, session.account.account_id);
-      quota = evaluateQuota(usage, body.size);
-    }
-    const gate = evaluateBrowserSendSize(
-      body.size,
-      session
-        ? {
-            signedIn: true,
-            eligible: session.account.eligible === 1,
-            suspended: session.account.status === 'suspended',
-            accountId: session.account.account_id,
-            quota,
-          }
-        : null,
+  const gate = evaluateBrowserSendSize(
+    body.size,
+    session
+      ? {
+          signedIn: true,
+          eligible: session.account.eligible === 1,
+          suspended: session.account.status === 'suspended',
+          accountId: session.account.account_id,
+          quota,
+        }
+      : null,
+  );
+  if (!gate.allow) {
+    return Response.json(
+      {
+        error: gate.error,
+        message: gate.message,
+        ...(gate.limits ? { limits: gate.limits } : {}),
+        ...(gate.quota ? { quota: gate.quota } : {}),
+      },
+      { status: gate.status },
     );
-    if (!gate.allow) {
-      return Response.json(
-        {
-          error: gate.error,
-          message: gate.message,
-          ...(gate.limits ? { limits: gate.limits } : {}),
-          ...(gate.quota ? { quota: gate.quota } : {}),
-        },
-        { status: gate.status },
-      );
-    }
-    accountId = gate.accountId;
   }
+  const accountId = gate.accountId;
 
   const shareId = generateShareId();
   const storagePrefix = crypto.randomUUID();
@@ -225,7 +182,7 @@ export async function createStoredShare(
     encryptionMode === 'none' ? 'manifest.json' : 'manifest.enc',
   );
 
-  await env.DB.prepare(
+  const created = await env.DB.prepare(
     `INSERT INTO stored_shares (
       share_id, storage_prefix, state, created_at, expires_at,
       pin_salt, pin_hash, item_kind, display_name, plaintext_size,
@@ -233,7 +190,10 @@ export async function createStoredShare(
       manifest_ciphertext_bytes, ciphertext_bytes_total, upload_token,
       expiry_mode, max_downloads, delete_after_complete, encryption_mode,
       email_notify_token_hash, account_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      WHERE ? IS NULL OR (
+        (${QUOTA_TOTAL_SQL}) + ? <= ? AND (${QUOTA_TOTAL_SQL}) + ? <= ?
+      )`,
   )
     .bind(
       shareId,
@@ -258,8 +218,13 @@ export async function createStoredShare(
       encryptionMode,
       emailNotify.hash,
       accountId,
+      accountId,
+      accountId, startOfUtcDay(now), accountId, body.size, DAILY_QUOTA_BYTES,
+      accountId, weekWindowStart(now), accountId, body.size, WEEKLY_QUOTA_BYTES,
     )
     .run();
+
+  if (created.meta.changes !== 1) return jsonError('quota_exceeded', 403);
 
   return Response.json({
     share_id: shareId,
@@ -315,66 +280,29 @@ export async function accessStoredShare(
     });
   }
 
-  if (await globalIpBlocked(env, request)) {
-    return accessDenied();
-  }
-
-  let body: { pin?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError(ErrorMsg.INVALID_REQUEST, 400);
-  }
-
-  const ipKey = await hashIp(clientIp(request));
-  const abuse = parseAbuse(row);
-
-  if (abuse.cooldown_until[ipKey] && abuse.cooldown_until[ipKey] > Date.now()) {
-    return accessDenied();
-  }
+  const body = await readJsonObject(request);
+  if (!body) return jsonError(ErrorMsg.INVALID_REQUEST, 400);
 
   if (pinRequired(row.pin_hash)) {
-    const pin = body.pin;
-    if (typeof pin !== 'string') {
-      await recordGlobalAccessFailure(env, request);
-      return accessDenied();
-    }
+    const reservation = await reservePinAttempt(env, request, shareId);
+    if (!reservation) return accessDenied();
+    const pin = body?.pin;
+    if (typeof pin !== 'string') return accessDenied();
     const ok = await verifyPin(pin, row.pin_salt, row.pin_hash);
-    if (!ok) {
-      recordFailedPin(
-        abuse,
-        ipKey,
-        (abuse.failed_pins[ipKey] ?? 0) + 1 >= MAX_PIN_FAILURES
-          ? Date.now() + COOLDOWN_MS
-          : null,
-      );
-      pruneAbuseTracking(abuse, Date.now());
-      await saveAbuse(env, shareId, abuse);
-      await recordGlobalAccessFailure(env, request);
-      return accessDenied();
-    }
+    if (!ok) return accessDenied();
+    await releasePinAttempt(env, reservation);
   }
-
-  if (abuse.failed_pins[ipKey] || abuse.cooldown_until[ipKey]) {
-    delete abuse.failed_pins[ipKey];
-    delete abuse.cooldown_until[ipKey];
-    pruneAbuseTracking(abuse, Date.now());
-  }
-
-  await clearGlobalAccessFailures(env, request);
 
   const now = Date.now();
   let downloadToken = row.encryption_mode === 'none' ? activeDownloadToken(row, now) : null;
   if (downloadToken) {
     await env.DB.prepare(
       `UPDATE stored_shares
-       SET last_access_at = ?, failed_pins = ?, cooldown_until = ?
+       SET last_access_at = ?
        WHERE share_id = ? AND state = 'ready' AND download_token = ?`,
     )
       .bind(
         now,
-        JSON.stringify(abuse.failed_pins),
-        JSON.stringify(abuse.cooldown_until),
         shareId,
         downloadToken,
       )
@@ -389,8 +317,7 @@ export async function accessStoredShare(
     const statement = env.DB.prepare(
       `UPDATE stored_shares
        SET download_token = ?, download_token_expires_at = ?,
-           download_count = download_count + 1, last_access_at = ?,
-           failed_pins = ?, cooldown_until = ?
+            download_count = download_count + 1, last_access_at = ?
        WHERE share_id = ? AND state = 'ready'
          AND download_count < max_downloads AND expires_at > ?${quickTokenGuard}`,
     );
@@ -400,8 +327,6 @@ export async function accessStoredShare(
             downloadToken,
             tokenExpires,
             now,
-            JSON.stringify(abuse.failed_pins),
-            JSON.stringify(abuse.cooldown_until),
             shareId,
             now,
             now,
@@ -412,8 +337,6 @@ export async function accessStoredShare(
             downloadToken,
             tokenExpires,
             now,
-            JSON.stringify(abuse.failed_pins),
-            JSON.stringify(abuse.cooldown_until),
             shareId,
             now,
           )
@@ -464,12 +387,7 @@ export async function completeStoredDownload(
     return unauthorized();
   }
 
-  let body: { bytes_received?: number } = {};
-  try {
-    body = await request.json();
-  } catch {
-    body = {};
-  }
+  const body = await readJsonObject(request) ?? {};
   if (
     typeof body.bytes_received === 'number' &&
     Number.isSafeInteger(body.bytes_received) &&
@@ -506,8 +424,8 @@ export async function uploadManifest(
     return unauthorized();
   }
 
-  const body = await request.arrayBuffer();
-  if (body.byteLength !== row.manifest_ciphertext_bytes) {
+  const body = await readBoundedBytes(request, Math.min(row.manifest_ciphertext_bytes, MAX_MANIFEST_BYTES));
+  if (!body || body.byteLength !== row.manifest_ciphertext_bytes) {
     return jsonError('manifest size mismatch', 400);
   }
 
@@ -536,32 +454,9 @@ export async function uploadChunk(
     return jsonError('invalid chunk index', 400);
   }
 
-  const body = await request.arrayBuffer();
-  if (body.byteLength === 0) {
-    return jsonError('empty chunk', 400);
-  }
-  if (body.byteLength > maxChunkCiphertextSizeForRow(row)) {
-    return jsonError('chunk too large', 400);
-  }
-
-  const expectedChunkMax = maxChunkCiphertextBytes(row, index);
-  if (body.byteLength > expectedChunkMax) {
-    return jsonError('chunk exceeds declared ciphertext total', 400);
-  }
-
-  const uploadSummary = await summarizeUploadedChunks(env, row.storage_prefix);
-  const existingForIndex = uploadSummary.bytes_by_index.get(index) ?? 0;
-  const dataCiphertextBudget = row.ciphertext_bytes_total - row.manifest_ciphertext_bytes;
-  if (
-    exceedsCiphertextBudget(
-      uploadSummary.total_bytes,
-      existingForIndex,
-      body.byteLength,
-      dataCiphertextBudget,
-    )
-  ) {
-    return jsonError('chunk exceeds declared ciphertext total', 400);
-  }
+  const expectedBytes = storedChunkBytes(row.plaintext_size, row.chunk_plaintext_size, index, row.encryption_mode !== 'none');
+  const body = await readBoundedBytes(request, expectedBytes);
+  if (!body || body.byteLength !== expectedBytes) return jsonError('chunk size mismatch', 400);
 
   const key = objectKey(row.storage_prefix, chunkName(index));
   await env.STORED.put(key, body, {
@@ -582,12 +477,8 @@ export async function completeStoredShare(
   }
   if (isExpired(row)) return shareExpired();
 
-  let body: { upload_token?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError(ErrorMsg.INVALID_REQUEST, 400);
-  }
+  const body = await readJsonObject(request);
+  if (!body) return jsonError(ErrorMsg.INVALID_REQUEST, 400);
   if (body.upload_token !== row.upload_token) {
     return unauthorized();
   }
@@ -615,20 +506,7 @@ export async function completeStoredShare(
     return jsonError('ciphertext total mismatch', 400);
   }
 
-  await env.DB.prepare(
-    `UPDATE stored_shares SET state = 'ready', upload_token = '' WHERE share_id = ?`,
-  )
-    .bind(shareId)
-    .run();
-
-  if (row.account_id) {
-    await recordUsageEvent(
-      env.DB,
-      row.account_id,
-      shareId,
-      row.plaintext_size,
-    );
-  }
+  if (!(await finalizeStoredUpload(env.DB, shareId, row.upload_token))) return accessDenied();
 
   return Response.json({ ok: true, status: 'ready' });
 }
@@ -741,10 +619,6 @@ function publicStatus(row: StoredRow): StoredShareStatus {
   return 'expired';
 }
 
-function isBrowserSend(body: CreateStoredBody): boolean {
-  return body.expiry_mode !== undefined || body.max_downloads !== undefined;
-}
-
 async function deleteStoredObjects(env: StoredShareEnv, row: StoredRow): Promise<void> {
   await env.STORED.delete(row.manifest_object_key);
   for (let index = 1; index <= row.chunk_count; index += 1) {
@@ -759,54 +633,15 @@ async function finishStoredDeletion(env: StoredShareEnv, row: StoredRow): Promis
     .run();
 }
 
-function parseAbuse(row: StoredRow) {
-  const failedPins = safeParseJsonRecord(row.failed_pins);
-  const cooldownUntil = safeParseJsonRecord(row.cooldown_until);
-  return {
-    failed_pins: failedPins,
-    cooldown_until: cooldownUntil,
-  };
-}
-
-function safeParseJsonRecord(raw: string): Record<string, number> {
-  if (!raw) return {};
-  try {
-    const value = JSON.parse(raw);
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      return {};
-    }
-    const out: Record<string, number> = {};
-    for (const [key, val] of Object.entries(value)) {
-      if (typeof val === 'number' && Number.isFinite(val) && val >= 0) {
-        out[key] = val;
-      }
-    }
-    return out;
-  } catch {
-    return {};
-  }
-}
-
-function maxChunkCiphertextBytes(row: StoredRow, index: number): number {
-  const totalDataCiphertext = row.ciphertext_bytes_total - row.manifest_ciphertext_bytes;
-  return calcMaxChunkCiphertextBytes(totalDataCiphertext, row.chunk_count, index);
-}
-
-function maxChunkCiphertextSizeForRow(row: StoredRow): number {
-  return calcMaxChunkCiphertextSizeForRow(row.chunk_plaintext_size);
-}
-
 async function summarizeUploadedChunks(
   env: StoredShareEnv,
   prefix: string,
 ): Promise<{
   chunk_count: number;
   total_bytes: number;
-  bytes_by_index: Map<number, number>;
 }> {
   let chunkCount = 0;
   let totalBytes = 0;
-  const bytesByIndex = new Map<number, number>();
   let cursor: string | undefined;
   do {
     const listing = await env.STORED.list({
@@ -821,7 +656,6 @@ async function summarizeUploadedChunks(
       }
       chunkCount += 1;
       totalBytes += Number(obj.size);
-      bytesByIndex.set(index, Number(obj.size));
     }
 
     cursor = listing.truncated ? listing.cursor : undefined;
@@ -830,7 +664,6 @@ async function summarizeUploadedChunks(
   return {
     chunk_count: chunkCount,
     total_bytes: totalBytes,
-    bytes_by_index: bytesByIndex,
   };
 }
 
@@ -842,18 +675,6 @@ function parseChunkIndex(key: string): number | null {
     return null;
   }
   return index;
-}
-
-async function saveAbuse(
-  env: StoredShareEnv,
-  shareId: string,
-  abuse: { failed_pins: Record<string, number>; cooldown_until: Record<string, number> },
-): Promise<void> {
-  await env.DB.prepare(
-    `UPDATE stored_shares SET failed_pins = ?, cooldown_until = ? WHERE share_id = ?`,
-  )
-    .bind(JSON.stringify(abuse.failed_pins), JSON.stringify(abuse.cooldown_until), shareId)
-    .run();
 }
 
 function isNonNegativeSafeInteger(value: unknown): value is number {

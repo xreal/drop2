@@ -1,3 +1,4 @@
+mod download_output;
 mod duration;
 mod error;
 mod hosted_share;

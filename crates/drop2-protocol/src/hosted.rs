@@ -51,6 +51,7 @@ pub struct CreateLiveShareResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LiveAccessRequest {
     pub client_public_key: String,
+    pub client_proof: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pin: Option<String>,
 }
@@ -59,6 +60,7 @@ pub struct LiveAccessRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LiveAccessResponse {
     pub server_public_key: String,
+    pub server_proof: String,
     pub join_token: String,
     pub connect_url: String,
     pub status: LiveShareStatus,
@@ -68,11 +70,28 @@ pub struct LiveAccessResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum WsControl {
-    JoinRequest { client_public_key: String },
-    JoinResponse { server_public_key: String },
+    JoinRequest {
+        client_public_key: String,
+        client_proof: String,
+        request_id: u64,
+    },
+    JoinResponse {
+        server_public_key: String,
+        server_proof: String,
+        request_id: u64,
+    },
+    JoinRejected {
+        request_id: u64,
+    },
     ReceiverConnected,
-    TransferComplete,
-    Error { code: String, message: String },
+    TransferComplete {
+        plaintext_bytes: u64,
+        completion_proof: String,
+    },
+    Error {
+        code: String,
+        message: String,
+    },
     State {
         status: LiveShareStatus,
         sender_online: bool,

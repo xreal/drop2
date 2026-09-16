@@ -15,6 +15,7 @@ import {
   uploadManifest,
 } from './stored-share';
 import { validPinMaterial } from './pin';
+import { readJsonObject } from './request-body';
 import { notifyStoredShare } from './email-notify';
 import {
   handleAuthSession,
@@ -230,12 +231,8 @@ async function createLiveShare(
   env: Env,
   url: URL,
 ): Promise<Response> {
-  let body: Record<string, unknown>;
-  try {
-    body = (await request.json()) as Record<string, unknown>;
-  } catch {
-    return jsonError('invalid request body', 400);
-  }
+  const body = await readJsonObject(request);
+  if (!body) return jsonError('invalid request body', 400);
 
   const kind = body.kind;
   const name = body.name;
@@ -306,7 +303,8 @@ async function admitReceiver(
 ): Promise<Response> {
   if (!isValidShareId(shareId)) return jsonError('invalid share id', 400);
 
-  const body = await request.text();
+  const body = await readJsonObject(request);
+  if (!body) return jsonError('invalid request body', 400);
   const ip = request.headers.get('cf-connecting-ip') ?? '0.0.0.0';
 
   const res = await doStub(env, shareId).fetch(
@@ -316,7 +314,7 @@ async function admitReceiver(
         'content-type': 'application/json',
         'x-drop2-ip': ip,
       },
-      body,
+      body: JSON.stringify(body),
     }),
   );
 
@@ -327,12 +325,14 @@ async function admitReceiver(
 
   const data = (await res.json()) as {
     server_public_key: string;
+    server_proof: string;
     join_token: string;
     status: string;
   };
 
   return Response.json({
     server_public_key: data.server_public_key,
+    server_proof: data.server_proof,
     join_token: data.join_token,
     connect_url: `/api/v1/live/${shareId}/connect?role=receiver&token=${encodeURIComponent(data.join_token)}`,
     status: data.status,
@@ -386,12 +386,8 @@ async function handleCreateStored(
   env: Env,
   url: URL,
 ): Promise<Response> {
-  let body: Record<string, unknown>;
-  try {
-    body = (await request.json()) as Record<string, unknown>;
-  } catch {
-    return jsonError('invalid request body', 400);
-  }
+  const body = await readJsonObject(request);
+  if (!body) return jsonError('invalid request body', 400);
 
   return createStoredShare(
     env,

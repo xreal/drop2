@@ -1,6 +1,5 @@
 use std::path::Path;
 use std::time::Duration;
-use tokio::fs;
 
 use drop2_crypto::{generate_pin, CapabilitySecret, Pin};
 use drop2_hosted::{
@@ -9,6 +8,7 @@ use drop2_hosted::{
 };
 use drop2_transfer::inspect_path;
 
+use crate::download_output::save_download;
 use crate::error::CoreError;
 
 const DEFAULT_STORED_EXPIRY: Duration = Duration::from_secs(5 * 86_400);
@@ -82,15 +82,14 @@ pub async fn run_receive(opts: ReceiveOptions) -> Result<ReceiveOutcome, CoreErr
     .map_err(map_hosted)?;
 
     let output_path = resolve_output_path(&result.display_name, opts.output.as_deref())?;
-    fs::write(&output_path, &result.bytes)
-        .await
-        .map_err(|e| CoreError::Runtime(e.to_string()))?;
+    let bytes_received = result.bytes.len();
+    save_download(output_path.clone(), result.bytes).await?;
 
     let mut deletion_confirmed = complete_stored_download(
         &config,
         &parsed.share_id,
         &result.download_token,
-        result.bytes.len(),
+        bytes_received,
     )
     .await
     .is_ok();
@@ -99,7 +98,7 @@ pub async fn run_receive(opts: ReceiveOptions) -> Result<ReceiveOutcome, CoreErr
             &config,
             &parsed.share_id,
             &result.download_token,
-            result.bytes.len(),
+            bytes_received,
         )
         .await
         .is_ok();
@@ -107,7 +106,7 @@ pub async fn run_receive(opts: ReceiveOptions) -> Result<ReceiveOutcome, CoreErr
 
     Ok(ReceiveOutcome {
         display_name: result.display_name,
-        bytes_written: result.bytes.len() as u64,
+        bytes_written: bytes_received as u64,
         output_path,
         deletion_confirmed,
     })
@@ -163,6 +162,13 @@ fn resolve_output_path(
 fn safe_file_name(display_name: &str) -> Result<&std::ffi::OsStr, CoreError> {
     let mut components = Path::new(display_name).components();
     match (components.next(), components.next()) {
+        (Some(std::path::Component::Normal(name)), None)
+            if name.as_encoded_bytes().starts_with(b".") =>
+        {
+            Err(CoreError::Runtime(
+                "share contains a hidden file name; choose a filename with --output".into(),
+            ))
+        }
         (Some(std::path::Component::Normal(name)), None) => Ok(name),
         _ => Err(CoreError::Runtime(
             "share contains an unsafe file name".into(),
@@ -202,6 +208,19 @@ mod tests {
     fn rejects_unsafe_received_file_names() {
         assert!(safe_file_name("../report.txt").is_err());
         assert!(safe_file_name("/tmp/report.txt").is_err());
+        assert!(safe_file_name(".zshrc").is_err());
+        assert!(safe_file_name(".zshenv").is_err());
         assert_eq!(safe_file_name("report.txt").unwrap(), "report.txt");
+    }
+
+    #[test]
+    fn explicit_output_filename_overrides_remote_hidden_name() {
+        let directory = tempfile::tempdir().unwrap();
+        assert!(resolve_output_path(".zshrc", Some(directory.path())).is_err());
+        let explicit = directory.path().join("shell-config.txt");
+        assert_eq!(
+            resolve_output_path(".zshrc", Some(&explicit)).unwrap(),
+            explicit
+        );
     }
 }

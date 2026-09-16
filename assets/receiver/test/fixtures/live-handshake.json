@@ -1,0 +1,14 @@
+{
+  "share_id": "abc123",
+  "capability": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+  "client_private_key": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM",
+  "server_private_key": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU",
+  "client_public_key": "Xf7dO2vUf2-ijuFdlp1bsOpTd01Ii9r53xxuASSz7yI",
+  "client_proof": "xLHgpr0k_aEQPa9NFzISNlYC-QTjvy1SuTzRh1IsFCs",
+  "server_public_key": "UKYUCbHd0DJemxa3AOcZ6XcsBwALG9d4bpB8ZT0gSV0",
+  "server_proof": "AgsA8jSR6G3rCGDIrscqRJRvu1egI7PcudvMTgItVGQ",
+  "dh_content_key": "kpAqd4n-wI0Xvm8xzbfErAGitsT3jjFV4qCoPx0jlKU",
+  "content_key": "0f_szldOkcelcn4fotetWYvaIXWG8X0iRDHBiUYgNPc",
+  "plaintext_bytes": 150000,
+  "completion_proof": "jE1O_GRzbDc_uqsGnmzSytQffb6fzieNGPd-wJXJA9o"
+}

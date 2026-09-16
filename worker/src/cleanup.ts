@@ -38,7 +38,7 @@ async function deleteExpiredStoredObjects(env: CleanupEnv): Promise<void> {
   const { results } = await env.DB.prepare(
     `SELECT share_id, storage_prefix, state
      FROM stored_shares
-     WHERE (expires_at <= ? OR state = 'deleting') AND state != 'deleted'`,
+      WHERE (expires_at <= ? OR state IN ('deleting', 'failed')) AND state != 'deleted'`,
   )
     .bind(now)
     .all<ExpiredRow>();

@@ -2,91 +2,60 @@ import { hashIp } from './ip-hash';
 
 const COOLDOWN_MS = 15 * 60 * 1000;
 const MAX_CROSS_SHARE_FAILURES = 20;
-const PRUNE_AFTER_MS = 24 * 60 * 60 * 1000;
-
-interface IpAbuseRow {
-  ip_hash: string;
-  failure_count: number;
-  cooldown_until: number;
-  updated_at: number;
-}
+const MAX_SHARE_FAILURES = 3;
 
 export interface AccessGuardEnv {
   DB: D1Database;
 }
 
-/** Returns a denial response when the IP is globally cooled down. */
-export async function globalIpBlocked(
-  env: AccessGuardEnv,
-  request: Request,
-): Promise<boolean> {
-  const ipKey = await hashIp(clientIpFrom(request));
-  const row = await env.DB.prepare(
-    'SELECT cooldown_until FROM ip_abuse WHERE ip_hash = ?',
-  )
-    .bind(ipKey)
-    .first<{ cooldown_until: number }>();
-
-  return row !== null && row.cooldown_until > Date.now();
+interface Reservation {
+  scope: string;
+  window: number;
 }
 
-/** Record a failed access attempt for cross-share IP throttling. */
-export async function recordGlobalAccessFailure(
+/** Reserve capacity before verification, including concurrent requests in the budget. */
+export async function reservePinAttempt(
   env: AccessGuardEnv,
   request: Request,
-): Promise<void> {
-  const ipKey = await hashIp(clientIpFrom(request));
+  shareId: string,
+): Promise<Reservation[] | null> {
+  const ip = request.headers.get('cf-connecting-ip') ?? request.headers.get('x-drop2-ip') ?? '0.0.0.0';
+  const ipKey = await hashIp(ip);
+  const global = await reserve(env, `global:${ipKey}`, MAX_CROSS_SHARE_FAILURES);
+  if (!global) return null;
+  const share = await reserve(env, `share:${shareId}:${ipKey}`, MAX_SHARE_FAILURES);
+  if (!share) {
+    await releasePinAttempt(env, [global]);
+    return null;
+  }
+  return [global, share];
+}
+
+async function reserve(env: AccessGuardEnv, scope: string, limit: number): Promise<Reservation | null> {
   const now = Date.now();
-
+  const cutoff = now - COOLDOWN_MS;
   const row = await env.DB.prepare(
-    'SELECT failure_count, cooldown_until FROM ip_abuse WHERE ip_hash = ?',
-  )
-    .bind(ipKey)
-    .first<IpAbuseRow>();
-
-  const failures = (row?.failure_count ?? 0) + 1;
-  const cooldownUntil =
-    failures >= MAX_CROSS_SHARE_FAILURES ? now + COOLDOWN_MS : (row?.cooldown_until ?? 0);
-
-  await env.DB.prepare(
-    `INSERT INTO ip_abuse (ip_hash, failure_count, cooldown_until, updated_at)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(ip_hash) DO UPDATE SET
-       failure_count = excluded.failure_count,
-       cooldown_until = excluded.cooldown_until,
-       updated_at = excluded.updated_at`,
-  )
-    .bind(ipKey, failures, cooldownUntil, now)
-    .run();
+    `INSERT INTO pin_attempts (scope, attempts, window_start) VALUES (?, 1, ?)
+     ON CONFLICT(scope) DO UPDATE SET
+       attempts = CASE WHEN window_start <= ? THEN 1 ELSE attempts + 1 END,
+       window_start = CASE WHEN window_start <= ? THEN excluded.window_start ELSE window_start END
+     WHERE window_start <= ? OR attempts < ?
+     RETURNING window_start`,
+  ).bind(scope, now, cutoff, cutoff, cutoff, limit).first<{ window_start: number }>();
+  return row ? { scope, window: row.window_start } : null;
 }
 
-/** Clear cross-share failure count after successful admission. */
-export async function clearGlobalAccessFailures(
-  env: AccessGuardEnv,
-  request: Request,
-): Promise<void> {
-  const ipKey = await hashIp(clientIpFrom(request));
-  await env.DB.prepare('DELETE FROM ip_abuse WHERE ip_hash = ?').bind(ipKey).run();
+/** Refund only this successful attempt; never erase other failures or a newer window. */
+export async function releasePinAttempt(env: AccessGuardEnv, reservations: Reservation[]): Promise<void> {
+  await env.DB.batch(reservations.map(({ scope, window }) => env.DB.prepare(
+    'UPDATE pin_attempts SET attempts = MAX(0, attempts - 1) WHERE scope = ? AND window_start = ?',
+  ).bind(scope, window)));
 }
 
-/** Remove stale ip_abuse rows (idempotent cleanup helper). */
 export async function pruneGlobalIpAbuse(env: AccessGuardEnv): Promise<number> {
-  const cutoff = Date.now() - PRUNE_AFTER_MS;
-  const result = await env.DB.prepare(
-    `DELETE FROM ip_abuse
-     WHERE updated_at < ? AND cooldown_until < ?`,
-  )
-    .bind(cutoff, Date.now())
-    .run();
+  const result = await env.DB.prepare('DELETE FROM pin_attempts WHERE window_start < ?')
+    .bind(Date.now() - 24 * 60 * 60 * 1000).run();
   return result.meta.changes ?? 0;
-}
-
-function clientIpFrom(request: Request): string {
-  return (
-    request.headers.get('cf-connecting-ip') ??
-    request.headers.get('x-drop2-ip') ??
-    '0.0.0.0'
-  );
 }
 
 export { MAX_CROSS_SHARE_FAILURES, COOLDOWN_MS as GLOBAL_COOLDOWN_MS };

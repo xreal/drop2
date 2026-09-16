@@ -1,15 +1,12 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Env, InitLiveShareParams, LiveShareInfoResponse } from './types';
 import type { LiveShareStatus, ShareKind, WsControl } from './protocol';
-import { pruneAbuseTracking, recordFailedPin } from './abuse-tracking';
 import { verifyPin, pinRequired } from './pin';
 import { isValidShareId } from './share-id';
 import { accessDenied, jsonError, ErrorMsg } from './api-errors';
-import { hashIp } from './ip-hash';
 import {
-  clearGlobalAccessFailures,
-  globalIpBlocked,
-  recordGlobalAccessFailure,
+  reservePinAttempt,
+  releasePinAttempt,
 } from './access-guard';
 import {
   clearJoinToken,
@@ -33,25 +30,28 @@ interface StoredState {
   join_token: string | null;
   join_token_expires_at: number | null;
   join_version: number;
-  failed_pins: Record<string, number>;
-  cooldown_until: Record<string, number>;
 }
 
-const COOLDOWN_MS = 15 * 60 * 1000;
-const MAX_PIN_FAILURES = 3;
 const MAX_WATCHERS = 32;
+const ENCODED_KEY = /^[A-Za-z0-9_-]{43}$/;
+
+interface SenderJoin {
+  server_public_key: string;
+  server_proof: string;
+}
 
 export class LiveShareDO extends DurableObject<Env> {
   private state: StoredState | null = null;
   private senderSocket: WebSocket | null = null;
   private receiverSocket: WebSocket | null = null;
+  private admissionPending = false;
   private watchSockets = new Set<WebSocket>();
   private senderInboundChain: Promise<void> = Promise.resolve();
   private pendingReceiverBinary: ArrayBuffer[] = [];
   private joinWaiters = new Map<
     number,
     {
-      resolve: (key: string) => void;
+      resolve: (join: SenderJoin) => void;
       reject: (err: Error) => void;
       timer: ReturnType<typeof setTimeout>;
     }
@@ -115,8 +115,6 @@ export class LiveShareDO extends DurableObject<Env> {
       join_token: null,
       join_token_expires_at: null,
       join_version: 0,
-      failed_pins: {},
-      cooldown_until: {},
     };
 
     await this.ctx.storage.put('state', this.state);
@@ -146,10 +144,6 @@ export class LiveShareDO extends DurableObject<Env> {
     if ('error' in state) return denyAccess();
     const s = state;
 
-    if (await globalIpBlocked(this.env, request)) {
-      return denyAccess();
-    }
-
     if (s.status === 'expired' || s.status === 'cancelled' || s.status === 'completed') {
       return denyAccess();
     }
@@ -160,7 +154,7 @@ export class LiveShareDO extends DurableObject<Env> {
       return denyAccess();
     }
 
-    let body: { client_public_key?: string; pin?: string };
+    let body: { client_public_key?: string; client_proof?: string; pin?: string };
     try {
       body = await request.json();
     } catch {
@@ -168,60 +162,39 @@ export class LiveShareDO extends DurableObject<Env> {
     }
 
     const clientKey = body.client_public_key;
-    if (!clientKey) return json({ error: ErrorMsg.INVALID_REQUEST }, 400);
-
-    const ip = request.headers.get('x-drop2-ip') ?? 'unknown';
-    const ipKey = await hashIp(ip);
-    const now = Date.now();
-    this.pruneAbuseTracking(now);
-
-    const cooldown = s.cooldown_until[ipKey] ?? 0;
-    if (now < cooldown) {
-      await recordGlobalAccessFailure(this.env, request);
-      return denyAccess();
+    const clientProof = body.client_proof;
+    if (typeof clientKey !== 'string' || !ENCODED_KEY.test(clientKey) ||
+        typeof clientProof !== 'string' || !ENCODED_KEY.test(clientProof)) {
+      return json({ error: ErrorMsg.INVALID_REQUEST }, 400);
     }
 
     if (pinRequired(s.pin_hash)) {
+      const reservation = await reservePinAttempt(this.env, request, s.share_id);
+      if (!reservation) return denyAccess();
       const pin = body.pin;
-      if (!pin) {
-        await recordGlobalAccessFailure(this.env, request);
-        return denyAccess();
-      }
+      if (typeof pin !== 'string') return denyAccess();
       const ok = await verifyPin(pin, s.pin_salt, s.pin_hash);
-      if (!ok) {
-        const fails = (s.failed_pins[ipKey] ?? 0) + 1;
-        const cooldownUntil = fails >= MAX_PIN_FAILURES ? now + COOLDOWN_MS : null;
-        recordFailedPin(s, ipKey, cooldownUntil);
-        this.pruneAbuseTracking(now);
-        await this.persist();
-        await recordGlobalAccessFailure(this.env, request);
-        return denyAccess();
-      }
+      if (!ok) return denyAccess();
+      await releasePinAttempt(this.env, reservation);
     }
 
-    if (s.failed_pins[ipKey] || s.cooldown_until[ipKey]) {
-      delete s.failed_pins[ipKey];
-      delete s.cooldown_until[ipKey];
-      this.pruneAbuseTracking(now);
-    }
-
-    await clearGlobalAccessFailures(this.env, request);
-
+    if (this.admissionPending || s.status !== 'waiting') return denyAccess();
+    this.admissionPending = true;
     s.join_version += 1;
     const version = s.join_version;
     const issued = issueJoinToken(Date.now(), crypto.randomUUID());
     s.join_token = issued.joinToken;
     s.join_token_expires_at = issued.joinTokenExpiresAt;
     s.status = 'waiting';
-    await this.persist();
 
     try {
-      const serverKey = await this.requestSenderJoin(clientKey, version);
+      await this.persist();
+      const join = await this.requestSenderJoin(clientKey, clientProof, version);
       s.status = 'active';
       await this.persist();
       this.broadcastState();
       return json({
-        server_public_key: serverKey,
+        ...join,
         join_token: issued.joinToken,
         status: s.status,
       });
@@ -230,6 +203,8 @@ export class LiveShareDO extends DurableObject<Env> {
       s.status = 'waiting';
       await this.persist();
       return json({ error: 'join failed' }, 502);
+    } finally {
+      this.admissionPending = false;
     }
   }
 
@@ -251,6 +226,7 @@ export class LiveShareDO extends DurableObject<Env> {
 
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
+    server.binaryType = 'arraybuffer';
     server.accept();
 
     if (role === 'sender') {
@@ -374,22 +350,28 @@ export class LiveShareDO extends DurableObject<Env> {
       return;
     }
 
-    if (msg.type === 'join_response' && msg.server_public_key) {
-      const version = this.state?.join_version ?? 0;
-      const waiter = this.joinWaiters.get(version);
+    if (msg.type === 'join_response' || msg.type === 'join_rejected') {
+      const waiter = this.joinWaiters.get(msg.request_id);
       if (waiter) {
         clearTimeout(waiter.timer);
-        this.joinWaiters.delete(version);
-        waiter.resolve(msg.server_public_key);
+        this.joinWaiters.delete(msg.request_id);
+        if (msg.type === 'join_response' &&
+            typeof msg.server_public_key === 'string' && ENCODED_KEY.test(msg.server_public_key) &&
+            typeof msg.server_proof === 'string' && ENCODED_KEY.test(msg.server_proof)) {
+          waiter.resolve({ server_public_key: msg.server_public_key, server_proof: msg.server_proof });
+        } else {
+          waiter.reject(new Error('receiver authentication failed'));
+        }
       }
     }
 
-    if (msg.type === 'transfer_complete') {
-      await this.completeTransfer();
+    if (msg.type === 'transfer_complete' && Number.isSafeInteger(msg.plaintext_bytes) &&
+        msg.plaintext_bytes >= 0 && typeof msg.completion_proof === 'string' && ENCODED_KEY.test(msg.completion_proof)) {
+      await this.completeTransfer(msg);
     }
   }
 
-  private async completeTransfer() {
+  private async completeTransfer(completion: Extract<WsControl, { type: 'transfer_complete' }>) {
     if (!this.state) {
       return;
     }
@@ -414,7 +396,7 @@ export class LiveShareDO extends DurableObject<Env> {
     this.joinWaiters.clear();
 
     if (this.receiverSocket?.readyState === WebSocket.OPEN) {
-      this.sendControl(this.receiverSocket, { type: 'transfer_complete' });
+      this.sendControl(this.receiverSocket, completion);
     }
 
     if (transition.closeSender) {
@@ -448,7 +430,7 @@ export class LiveShareDO extends DurableObject<Env> {
     this.pendingReceiverBinary = [];
   }
 
-  private requestSenderJoin(clientKey: string, version: number): Promise<string> {
+  private requestSenderJoin(clientKey: string, clientProof: string, version: number): Promise<SenderJoin> {
     return new Promise((resolve, reject) => {
       if (!this.senderSocket || this.senderSocket.readyState !== WebSocket.OPEN) {
         reject(new Error('sender offline'));
@@ -464,6 +446,8 @@ export class LiveShareDO extends DurableObject<Env> {
       this.sendControl(this.senderSocket, {
         type: 'join_request',
         client_public_key: clientKey,
+        client_proof: clientProof,
+        request_id: version,
       });
     });
   }
@@ -534,11 +518,6 @@ export class LiveShareDO extends DurableObject<Env> {
     if (this.state) {
       await this.ctx.storage.put('state', this.state);
     }
-  }
-
-  private pruneAbuseTracking(now: number) {
-    if (!this.state) return;
-    pruneAbuseTracking(this.state, now);
   }
 
   constructor(ctx: DurableObjectState, env: Env) {

@@ -1,16 +1,18 @@
 use std::pin::Pin;
-use std::sync::Arc;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use bytes::Bytes;
-use drop2_crypto::{EphemeralKeyPair, Pin as Drop2Pin, ShareId};
+use drop2_crypto::{
+    accept_live_receiver, live_completion_proof, CapabilitySecret, Pin as Drop2Pin, ShareId,
+    FRAME_TAG_SIZE,
+};
 use drop2_protocol::{CreateLiveShareResponse, WsControl};
 use drop2_transfer::{
     ByteSource, EncryptedFrameStream, FileSource, FolderZipSource, InputKind, ShareInput,
 };
 use futures::{Stream, StreamExt};
 use futures_util::SinkExt;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use url::Url;
 
@@ -108,8 +110,7 @@ impl HostedSender {
         let share_id =
             ShareId::parse(&create.share_id).map_err(|_| HostedError::InvalidResponse)?;
 
-        let keypair = EphemeralKeyPair::generate();
-        let keypair = Arc::new(Mutex::new(keypair));
+        let capability = CapabilitySecret::generate();
 
         let source = build_source(&input)?;
         let (cancel_tx, mut cancel_rx) = mpsc::channel::<()>(1);
@@ -119,10 +120,15 @@ impl HostedSender {
         let ws_url = to_ws_url(&config.url(&create.connect_url))?;
         let sender_token = create.sender_token.clone();
         let display_name = input.display_name.clone();
-        let share_url = create.share_url.clone();
+        let share_url = format!(
+            "{}/s/{}#{}",
+            config.base_url.trim_end_matches('/'),
+            share_id,
+            capability.encode()
+        );
         let wait_seconds = create.wait_seconds;
 
-        let keypair_task = keypair.clone();
+        let session_share_id = share_id.clone();
         let join = tokio::spawn(async move {
             let url = Url::parse(&ws_url).map_err(|e| HostedError::Network(e.to_string()))?;
             let (ws, _) = connect_async(url.as_str())
@@ -146,14 +152,22 @@ impl HostedSender {
                                 let ctrl: WsControl = serde_json::from_str(&text)
                                     .map_err(|e| HostedError::Session(e.to_string()))?;
                                 match ctrl {
-                                    WsControl::JoinRequest { client_public_key } => {
-                                        let client_key = decode_key(&client_public_key)?;
-                                        let kp = keypair_task.lock().await;
-                                        let keys = kp.complete(&client_key)
-                                            .map_err(|_| HostedError::Session("key exchange failed".into()))?;
-                                        content_key = Some(keys.content_key.clone());
-                                        let response = WsControl::JoinResponse {
-                                            server_public_key: URL_SAFE_NO_PAD.encode(kp.public_key_bytes()),
+                                    WsControl::JoinRequest { client_public_key, client_proof, request_id } => {
+                                        let authenticated = decode_key(&client_public_key)
+                                            .and_then(|public| decode_key(&client_proof).map(|proof| (public, proof)))
+                                            .and_then(|(public, proof)| accept_live_receiver(&capability, &session_share_id, &public, &proof)
+                                                .map_err(|_| HostedError::Session("invalid receiver proof".into())));
+                                        let response = match authenticated {
+                                            Ok(join) => {
+                                                content_key = Some(join.content_key);
+                                                receiver_ready = false;
+                                                WsControl::JoinResponse {
+                                                    server_public_key: URL_SAFE_NO_PAD.encode(join.server_public_key),
+                                                    server_proof: URL_SAFE_NO_PAD.encode(join.server_proof),
+                                                    request_id,
+                                                }
+                                            }
+                                            Err(_) => WsControl::JoinRejected { request_id },
                                         };
                                         let json = serde_json::to_string(&response)
                                             .map_err(|e| HostedError::Session(e.to_string()))?;
@@ -172,8 +186,11 @@ impl HostedSender {
 
                                 if receiver_ready && content_key.is_some() && source.is_some() {
                                     if let (Some(key), Some(src)) = (content_key.take(), source.take()) {
-                                        stream_source(&mut write, key, src).await?;
-                                        let done = serde_json::to_string(&WsControl::TransferComplete)
+                                        let plaintext_bytes = stream_source(&mut write, key.clone(), src).await?;
+                                        let done = serde_json::to_string(&WsControl::TransferComplete {
+                                            plaintext_bytes,
+                                            completion_proof: URL_SAFE_NO_PAD.encode(live_completion_proof(&key, plaintext_bytes)),
+                                        })
                                             .map_err(|e| HostedError::Session(e.to_string()))?;
                                         write.send(Message::Text(done.into())).await
                                             .map_err(|e| HostedError::Network(e.to_string()))?;
@@ -252,7 +269,7 @@ async fn stream_source(
     write: &mut (impl SinkExt<Message, Error = tokio_tungstenite::tungstenite::Error> + Unpin),
     content_key: zeroize::Zeroizing<[u8; 32]>,
     source: Box<dyn ByteSource>,
-) -> Result<(), HostedError> {
+) -> Result<u64, HostedError> {
     let byte_stream = source.into_byte_stream().map(|chunk| {
         chunk
             .map(Bytes::from)
@@ -262,14 +279,16 @@ async fn stream_source(
         Box::pin(byte_stream);
 
     let mut encrypted = EncryptedFrameStream::new(content_key, byte_stream);
+    let mut plaintext_bytes = 0;
     while let Some(frame) = encrypted.next().await {
         let frame = frame.map_err(|e| HostedError::Session(e.to_string()))?;
+        plaintext_bytes += (frame.len() - 4 - FRAME_TAG_SIZE) as u64;
         write
             .send(Message::Binary(frame.into()))
             .await
             .map_err(|e| HostedError::Network(e.to_string()))?;
     }
-    Ok(())
+    Ok(plaintext_bytes)
 }
 
 fn decode_key(encoded: &str) -> Result<[u8; 32], HostedError> {

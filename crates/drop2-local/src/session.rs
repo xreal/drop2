@@ -16,6 +16,7 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::error::LocalError;
+use crate::pin_gate::PinGate;
 use crate::server::LocalTransferEvent;
 
 pub struct SessionState {
@@ -24,6 +25,7 @@ pub struct SessionState {
     kind: ShareKind,
     size: u64,
     pin: Option<Drop2Pin>,
+    pin_gate: Mutex<PinGate>,
     keypair: EphemeralKeyPair,
     source_path: PathBuf,
     source_kind: InputKind,
@@ -119,6 +121,7 @@ impl SessionState {
             kind,
             size,
             pin,
+            pin_gate: Mutex::new(PinGate::default()),
             keypair,
             source_path,
             source_kind,
@@ -172,11 +175,11 @@ impl SessionState {
         }
 
         if let Some(expected) = &self.pin {
-            let provided = request.pin.as_deref().ok_or(LocalError::PinRequired)?;
-            let pin = Drop2Pin::parse(provided).map_err(|_| LocalError::PinRejected)?;
-            if pin != *expected {
-                return Err(LocalError::PinRejected);
-            }
+            self.pin_gate.lock().await.verify(
+                expected,
+                request.pin.as_deref(),
+                std::time::Instant::now(),
+            )?;
         }
 
         let client_key = decode_key(&request.client_public_key)?;

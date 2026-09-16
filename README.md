@@ -12,7 +12,7 @@ Send a file or folder with one command:
 drop2 report.pdf
 ```
 
-You get a short link (for example `https://drop2.app/s/gS8M5b`) and, for internet shares, a 4-digit PIN.
+You get a share link and, for internet shares, a 4-digit PIN. Encrypted hosted links include a secret after `#`; send the complete link to your recipient.
 Receivers open the link in a browser or download with the CLI:
 
 ```bash
@@ -34,13 +34,14 @@ The hosted service and LAN relay never see your plaintext. Encryption happens on
 
 | Mode | Command | Sender online? | Link | Default PIN |
 |------|---------|----------------|------|-------------|
-| **Live (internet)** | `drop2 file.zip` | Yes | Short public URL | Auto-generated |
+| **Live (internet)** | `drop2 file.zip` | Yes | URL with secret fragment | Auto-generated |
 | **Live (LAN)** | `drop2 --local file.zip` | Yes | Local HTTPS URL | Optional |
-| **Stored** | `drop2 --keep file.zip` | No (after upload) | Short public URL | Auto-generated |
+| **Stored** | `drop2 --keep file.zip` | No (after upload) | URL with secret fragment | Auto-generated |
 | **Quick link (browser)** | [drop2.app](https://drop2.app) | No (after upload) | Short public URL | Required |
 
 Live shares auto-close after one hour if no download starts (override with `--wait`).
 Stored shares default to a five-day retention (`--expires 7d` to change).
+Anonymous stored uploads, including CLI `--keep`, are limited to 10 MiB. Eligible signed-in browser senders can upload up to 1 GiB within their account quota; CLI login is not implemented yet.
 Quick links are deleted after the first completed download by default and become inaccessible after two hours.
 
 ## Install
@@ -131,8 +132,14 @@ drop2 get https://drop2.app/s/gS8M5b --pin 4821
 drop2 get 'https://drop2.app/s/gS8M5b#secret' --output ~/Downloads
 ```
 
-For encrypted stored shares, the decryption secret lives in the URL fragment (`#...`).
+CLI downloads never replace an existing file or symlink, including with `--output`.
+If the destination already exists, choose a new filename with `--output`.
+Sender-provided hidden filenames also require an explicit output filename.
+The completed file is saved before a delete-after-download share is acknowledged.
+
+For encrypted hosted shares, the capability secret lives in the URL fragment (`#...`).
 It is never sent to the server when the page loads.
+Live transfers use it to authenticate the key exchange; stored transfers use it to decrypt the manifest.
 Browser quick links omit this fragment and are therefore not end-to-end encrypted; use the required PIN as a separate access gate.
 
 ### Flags
@@ -157,7 +164,7 @@ Sender (drop2 CLI)                Untrusted relay                 Receiver (brow
        │                                 │                                │ decrypt locally
 ```
 
-- **Live shares:** ephemeral keys exchanged over a WebSocket; content streamed frame-by-frame.
+- **Live shares:** capability-authenticated ephemeral keys exchanged over a WebSocket; content streamed frame-by-frame. The relay cannot substitute either peer's key without detection.
 - **Stored shares:** encrypted locally, uploaded as chunks; metadata and ciphertext live in Cloudflare D1 and R2.
 - **LAN shares:** the CLI embeds the browser receiver — no CDN, no third-party scripts.
 - **PINs:** gate access on the control plane; they are not the primary decryption secret for stored shares.

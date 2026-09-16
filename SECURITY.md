@@ -15,7 +15,7 @@
 
 ### Cryptography
 
-- [ ] Live transfers use X25519 key exchange + XChaCha20-Poly1305 AEAD
+- [x] Internet live transfers authenticate X25519 key exchange with a sender-generated 32-byte URL-fragment capability, then use XChaCha20-Poly1305 AEAD
 - [ ] Stored shares encrypt locally before upload; DEK wrapped with capability secret
 - [ ] PIN is an access gate only, not the primary decryption secret for stored shares
 - [ ] Encrypted chunk and manifest integrity is authenticated (AEAD tags)
@@ -31,8 +31,8 @@
 
 - [ ] Internet live shares require PIN by default
 - [ ] PIN verification uses salted hashes, not plaintext storage
-- [ ] Failed PIN attempts per IP per share trigger cooldown (3 → 15 min)
-- [ ] Cross-share probing from one IP triggers global cooldown (20 failures)
+- [x] Hosted PIN checks atomically reserve attempts before verification: at most 3 failed/in-flight checks per IP/share and 20 per IP across shares in a 15-minute window; successful checks refund only their own attempts
+- [x] LAN PIN checks use a serialized share-wide budget: 3 failures trigger a 15-minute cooldown
 - [ ] Join tokens are short-lived and bound to session state
 - [ ] One active receiver per live share (MVP)
 
@@ -48,6 +48,17 @@
 - [ ] Stored shares expire deterministically in D1
 - [ ] Minutely cron cleans expired stored metadata and R2 objects
 - [ ] Sender disconnect ends active live share
+- [x] CLI downloads publish complete files without replacing existing files or symlinks; sender-supplied hidden names require an explicit output filename
+- [x] Stored creates validate exact chunk geometry and ciphertext overhead, bound manifest size, and enforce anonymous/authenticated size limits regardless of client-supplied mode fields
+- [x] Account quota is reserved atomically at stored-share creation and converted to usage on completion; stale uploads release reservations during cleanup
+
+## Authenticated live protocol
+
+Hosted live links now require their complete `#capability` fragment. Both clients must use the authenticated protocol; there is no fallback to the unauthenticated handshake. Deploy the updated Worker and browser assets with the updated CLI, and recreate old live shares.
+
+Receiver proofs bind the share ID and receiver public key. Sender proofs and content-key derivation bind both public keys and the share ID, with separate domain labels. Each accepted handshake uses a fresh sender key pair, and non-contributory X25519 keys are rejected. A completion MAC authenticates the final byte count against whole-frame truncation. Rust/browser contract fixtures and a real CLI-to-Worker transfer test cover the protocol.
+
+The relay receives proofs, never the capability. This protects against key substitution by the relay; browser users still trust the delivered application code. The separate optional server-side email feature necessarily sends its link capability to the email-sending Worker, as specified by that feature.
 
 ### Supply chain
 

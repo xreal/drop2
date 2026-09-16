@@ -21,16 +21,26 @@ export type WsControl =
   | {
       type: 'join_request';
       client_public_key: string;
+      client_proof: string;
+      request_id: number;
     }
   | {
       type: 'join_response';
       server_public_key: string;
+      server_proof: string;
+      request_id: number;
+    }
+  | {
+      type: 'join_rejected';
+      request_id: number;
     }
   | {
       type: 'receiver_connected';
     }
   | {
       type: 'transfer_complete';
+      plaintext_bytes: number;
+      completion_proof: string;
     }
   | {
       type: 'error';

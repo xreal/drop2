@@ -8,6 +8,7 @@ import {
 } from './frame-stream.js';
 import { downloadStoredShare, parseCapabilityFragment } from './stored-crypto.js';
 import { mapApiError, UserMsg } from './errors.js';
+import { createLiveAccess, completeLiveJoin, verifyLiveCompletion } from './live-crypto.js';
 
 const enc = new TextEncoder();
 
@@ -124,11 +125,7 @@ async function joinHosted({ ctx, info, onProgress, onStatus }) {
   onStatus('Preparing secure session…');
 
   const privateKey = x25519.utils.randomPrivateKey();
-  const publicKey = x25519.getPublicKey(privateKey);
-
-  const accessBody = {
-    client_public_key: b64urlEncode(publicKey),
-  };
+  const accessBody = createLiveAccess(ctx.capability, ctx.shareId, privateKey);
   if (info.pin_required) {
     const pin = prompt('Enter 4-digit PIN');
     if (!pin) throw new Error(UserMsg.PIN_REQUIRED);
@@ -146,9 +143,7 @@ async function joinHosted({ ctx, info, onProgress, onStatus }) {
   }
   const access = await accessRes.json();
 
-  const serverPublic = b64urlDecode(access.server_public_key);
-  const shared = x25519.getSharedSecret(privateKey, serverPublic);
-  const contentKey = deriveContentKey(shared);
+  const contentKey = completeLiveJoin(ctx.capability, ctx.shareId, privateKey, access);
 
   onStatus('Downloading encrypted stream…');
 
@@ -187,8 +182,15 @@ function receiveWebSocket(wsUrl, contentKey, onProgress, expectedBytes) {
       if (typeof event.data === 'string') {
         const msg = parseWsControl(event.data);
         if (msg?.type === 'transfer_complete') {
-          transferComplete = true;
-          queueMicrotask(() => finish());
+          try {
+            verifyLiveCompletion(contentKey, state.receivedBytes, msg);
+            transferComplete = true;
+            queueMicrotask(() => finish());
+          } catch (error) {
+            settled = true;
+            reject(error);
+            ws.close();
+          }
         } else if (msg?.type === 'error') {
           settled = true;
           reject(new Error(msg.message || 'Transfer failed'));

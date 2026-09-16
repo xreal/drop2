@@ -25,6 +25,9 @@ impl EphemeralKeyPair {
     pub fn complete(&self, peer_public: &[u8; 32]) -> Result<SessionKeys, CryptoError> {
         let peer = PublicKey::from(*peer_public);
         let shared = self.secret.diffie_hellman(&peer);
+        if !shared.was_contributory() {
+            return Err(CryptoError::InvalidKey);
+        }
         let content_key = derive_content_key(shared.as_bytes())?;
         Ok(SessionKeys { content_key })
     }
@@ -43,6 +46,9 @@ impl ReceiverEphemeral {
     pub fn complete(self, sender_public: &[u8; 32]) -> Result<SessionKeys, CryptoError> {
         let peer = PublicKey::from(*sender_public);
         let shared = self.0.diffie_hellman(&peer);
+        if !shared.was_contributory() {
+            return Err(CryptoError::InvalidKey);
+        }
         derive_content_key(shared.as_bytes()).map(|content_key| SessionKeys { content_key })
     }
 }

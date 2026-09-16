@@ -1,5 +1,6 @@
 mod assets;
 mod error;
+mod pin_gate;
 mod server;
 mod session;
 

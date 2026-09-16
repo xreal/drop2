@@ -2,24 +2,26 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  exceedsCiphertextBudget,
-  maxChunkCiphertextBytes,
-  maxChunkCiphertextSizeForRow,
+  validStoredLayout,
+  storedChunkBytes,
   validateReadyTotals,
 } from './stored-limits.ts';
 
-test('maxChunkCiphertextSizeForRow adds protocol overhead', () => {
-  assert.equal(maxChunkCiphertextSizeForRow(1024), 1044);
+test('stored layout binds plaintext size, chunk geometry, and ciphertext bytes', () => {
+  const valid = {size:10, chunk_count:2, chunk_plaintext_size:8, manifest_ciphertext_bytes:100, ciphertext_bytes_total:150};
+  assert.equal(validStoredLayout(valid), true);
+  for (const change of [{size:1}, {chunk_count:3}, {ciphertext_bytes_total:151}, {size:NaN}, {manifest_ciphertext_bytes:65537}]) {
+    assert.equal(validStoredLayout({...valid, ...change}), false);
+  }
+  assert.equal(validStoredLayout({...valid, encryption_mode:'none', ciphertext_bytes_total:110}), true);
+  assert.equal(validStoredLayout({...valid, size:0, chunk_count:1, ciphertext_bytes_total:120}), true);
 });
 
-test('maxChunkCiphertextBytes reserves minimum bytes for remaining chunks', () => {
-  assert.equal(maxChunkCiphertextBytes(100, 3, 1), 98);
-  assert.equal(maxChunkCiphertextBytes(100, 3, 3), 100);
-});
-
-test('exceedsCiphertextBudget detects over-budget replacement', () => {
-  assert.equal(exceedsCiphertextBudget(60, 10, 15, 65), false);
-  assert.equal(exceedsCiphertextBudget(60, 10, 16, 65), true);
+test('chunk sizes include framing and the shorter final chunk', () => {
+  assert.equal(storedChunkBytes(10, 8, 1, true), 28);
+  assert.equal(storedChunkBytes(10, 8, 2, true), 22);
+  assert.equal(storedChunkBytes(10, 8, 2, false), 2);
+  assert.equal(storedChunkBytes(0, 8, 1, true), 20);
 });
 
 test('validateReadyTotals catches missing chunks and total mismatch', () => {
