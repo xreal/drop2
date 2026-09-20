@@ -20,6 +20,7 @@
           </a>
           <nav class="site-nav" aria-label="Main navigation">
             <a href="/" aria-current="page">Send</a>
+            <a href="#downloads">Downloads</a>
             <a href="/faq">FAQ</a>
             <a href="https://github.com/xreal/drop2" rel="noopener noreferrer">GitHub</a>
             <span id="auth-slot" class="auth-slot">
@@ -103,13 +104,13 @@
                   <span class="row-copy"><strong>Require a PIN</strong><small>Generate a separate 4-digit access code.</small></span>
                   <span class="toggle"><input id="pin-required" type="checkbox" checked /><span></span></span>
                 </label>
-                <div class="option-row is-disabled" aria-disabled="true">
+                <label class="option-row" for="download-notification">
                   <span class="row-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
                   </span>
-                  <span class="row-copy"><strong>Download notification <em>Coming soon</em></strong><small>Know when your file is received.</small></span>
-                  <span class="toggle"><input type="checkbox" disabled /><span></span></span>
-                </div>
+                  <span class="row-copy"><strong>Download notification</strong><small id="notification-permission">Know when your file is received. Keep this page open.</small></span>
+                  <span class="toggle"><input id="download-notification" type="checkbox" /><span></span></span>
+                </label>
               </div>
             </details>
 
@@ -188,6 +189,17 @@
             </div>
           </div>
           <button id="send-another" type="button" class="secondary-action another-action">↻ Send another file</button>
+        </section>
+
+        <section id="downloads" class="card downloads-card" aria-labelledby="downloads-title">
+          <div class="downloads-heading">
+            <div><h2 id="downloads-title">Your downloads</h2><p id="download-summary"></p></div>
+            <button id="enable-notifications" type="button" class="secondary-action compact" hidden>Allow notifications</button>
+          </div>
+          <ul id="download-list" class="download-list"></ul>
+          <p id="download-connection" class="status-message" role="status"></p>
+          <p id="download-storage" class="helper">Your latest 20 shares, saved in this browser until 7 days after expiry. Removing an entry only clears its history.</p>
+          <p class="helper">“Downloaded” means the receiver confirmed full receipt. Keep this page open for automatic updates and notifications.</p>
         </section>
 
         <div id="trust-strip" class="trust-strip" aria-label="Service qualities">

@@ -1,3 +1,4 @@
+import { initDownloadNotifications } from './download-notifications.js';
 import {
   ANONYMOUS_BROWSER_SEND_LIMIT,
   AUTHENTICATED_BROWSER_SEND_LIMIT,
@@ -55,6 +56,8 @@ const authSigninEl = document.querySelector('#auth-signin');
 const authUserEl = document.querySelector('#auth-user');
 const authLoginEl = document.querySelector('#auth-login');
 const authSignoutEl = document.querySelector('#auth-signout');
+
+const downloadNotifications = initDownloadNotifications();
 
 const expiryLabels = {
   after_download: 'It will be deleted after the first completed download.',
@@ -162,6 +165,7 @@ formEl.addEventListener('submit', async (event) => {
     setStatus(quickLink ? 'Uploading file…' : 'Uploading encrypted data…', 'active');
     const result = await uploadPreparedStoredShare(prepared, { onProgress: updateProgress });
 
+    downloadNotifications.track(result, prepared.fileName);
     showSuccess({
       result,
       displayName: prepared.fileName,

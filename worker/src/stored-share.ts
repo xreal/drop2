@@ -1,3 +1,4 @@
+import { hashToken } from './token-proof';
 import type { ShareKind, StoredShareStatus } from './protocol';
 import { verifyPin, pinRequired, validPinMaterial } from './pin';
 import { generateShareId, isValidShareId } from './share-id';
@@ -175,6 +176,8 @@ export async function createStoredShare(
   const storagePrefix = crypto.randomUUID();
   const uploadToken = crypto.randomUUID();
   const emailNotify = await createEmailNotifyProof();
+  const statusToken = crypto.randomUUID();
+  const statusTokenHash = await hashToken(statusToken);
   const now = Date.now();
   const expiresAt = now + expiry.expiresSeconds * 1000;
   const manifestKey = objectKey(
@@ -189,8 +192,8 @@ export async function createStoredShare(
       manifest_object_key, chunk_count, chunk_plaintext_size,
       manifest_ciphertext_bytes, ciphertext_bytes_total, upload_token,
       expiry_mode, max_downloads, delete_after_complete, encryption_mode,
-      email_notify_token_hash, account_id
-    ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      email_notify_token_hash, account_id, download_status_token_hash
+    ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       WHERE ? IS NULL OR (
         (${QUOTA_TOTAL_SQL}) + ? <= ? AND (${QUOTA_TOTAL_SQL}) + ? <= ?
       )`,
@@ -218,6 +221,7 @@ export async function createStoredShare(
       encryptionMode,
       emailNotify.hash,
       accountId,
+      statusTokenHash,
       accountId,
       accountId, startOfUtcDay(now), accountId, body.size, DAILY_QUOTA_BYTES,
       accountId, weekWindowStart(now), accountId, body.size, WEEKLY_QUOTA_BYTES,
@@ -232,6 +236,7 @@ export async function createStoredShare(
     storage_prefix: storagePrefix,
     upload_token: uploadToken,
     email_notify_token: emailNotify.token,
+    download_status_token: statusToken,
     expires_at: expiresAt,
   });
 }
@@ -387,25 +392,24 @@ export async function completeStoredDownload(
     return unauthorized();
   }
 
-  const body = await readJsonObject(request) ?? {};
-  if (
-    typeof body.bytes_received === 'number' &&
-    Number.isSafeInteger(body.bytes_received) &&
-    body.bytes_received !== row.plaintext_size
-  ) {
+  const body = await readJsonObject(request);
+  if (!body || !Number.isSafeInteger(body.bytes_received) || body.bytes_received !== row.plaintext_size) {
     return jsonError('download size mismatch', 400);
   }
 
-  if (row.delete_after_complete === 1) {
-    await env.DB.prepare(
-      `UPDATE stored_shares
-       SET state = 'deleting', download_token = NULL, download_token_expires_at = NULL
-       WHERE share_id = ?`,
-    )
-      .bind(shareId)
-      .run();
-    await finishStoredDeletion(env, row);
+  const now = Date.now();
+  const completion = await env.DB.prepare(
+    `UPDATE stored_shares
+     SET downloaded_at = COALESCE(downloaded_at, ?),
+         state = CASE WHEN delete_after_complete = 1 THEN 'deleting' ELSE state END
+     WHERE share_id = ? AND state = 'ready' AND download_token = ?
+       AND download_token_expires_at >= ? AND expires_at > ?`,
+  ).bind(now, shareId, row.download_token, now, now).run();
+  if (completion.meta.changes !== 1) {
+    const current = await fetchRow(env, shareId);
+    if (!current || !['deleting', 'deleted'].includes(current.state)) return unauthorized();
   }
+  if (row.delete_after_complete === 1) await finishStoredDeletion(env, row);
 
   return Response.json({ ok: true });
 }
@@ -628,7 +632,10 @@ async function deleteStoredObjects(env: StoredShareEnv, row: StoredRow): Promise
 
 async function finishStoredDeletion(env: StoredShareEnv, row: StoredRow): Promise<void> {
   await deleteStoredObjects(env, row);
-  await env.DB.prepare(`UPDATE stored_shares SET state = 'deleted' WHERE share_id = ?`)
+  await env.DB.prepare(
+    `UPDATE stored_shares SET state = 'deleted', download_token = NULL,
+     download_token_expires_at = NULL WHERE share_id = ?`,
+  )
     .bind(row.share_id)
     .run();
 }

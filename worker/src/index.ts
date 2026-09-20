@@ -1,3 +1,4 @@
+import { getDownloadStatus } from './download-status';
 import { LiveShareDO } from './live-share-do';
 import type { Env } from './types';
 import { generateShareId, isValidShareId } from './share-id';
@@ -108,6 +109,11 @@ export default {
     const storedInfo = url.pathname.match(/^\/api\/v1\/stored\/([A-Za-z0-9]{6})$/);
     if (storedInfo && request.method === 'GET') {
       return getStoredShareInfo(env, storedInfo[1]);
+    }
+
+    const downloadStatus = url.pathname.match(/^\/api\/v1\/stored\/([A-Za-z0-9]{6})\/download-status$/);
+    if (downloadStatus && request.method === 'GET') {
+      return getDownloadStatus(env, downloadStatus[1], request);
     }
 
     const storedAccess = url.pathname.match(

@@ -1,3 +1,4 @@
+import { pruneDownloadStatus } from './download-status';
 import { pruneGlobalIpAbuse, type AccessGuardEnv } from './access-guard';
 import { pruneEmailRateLimits } from './email-rate-limit';
 
@@ -20,6 +21,7 @@ export async function runCleanup(env: CleanupEnv): Promise<void> {
   await deleteExpiredStoredObjects(env);
   await pruneGlobalIpAbuse(env);
   await pruneEmailRateLimits(env);
+  await pruneDownloadStatus(env);
 }
 
 async function expireStaleUploads(env: CleanupEnv): Promise<void> {
