@@ -14,6 +14,7 @@ const required = [
   'faq.html',
   'send.css',
   'send.bundle.js',
+  'notification-worker.js',
 ];
 
 for (const name of required) {

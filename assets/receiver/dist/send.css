@@ -596,3 +596,9 @@
   .download-remove { order: 1; }
   .download-badge { order: 2; }
 }
+
+.notification-settings { margin-top: 20px; padding: 16px; border: 1px solid var(--border-soft); border-radius: 12px; background: var(--surface-soft); }
+.notification-settings > p:first-child { margin: 0; font-size: .85rem; line-height: 1.5; }
+.notification-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.notification-settings .helper:empty { display: none; }
+.download-row .download-detail { font-size: .75rem; overflow-wrap: anywhere; }

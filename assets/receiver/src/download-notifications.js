@@ -1,12 +1,12 @@
+import { createSystemNotifications, showDownloadNotification } from './system-notifications.js';
+import { initNotificationControls } from './notification-controls.js';
+import { downloadDetailLines } from './download-details.js';
 import { HISTORY_KEY, createHistory, downloadLabel, needsDownloadCheck, readDownloadStatus } from './download-history.js';
 
 export function initDownloadNotifications() {
-  const toggle = document.querySelector('#download-notification');
-  const permissionCopy = document.querySelector('#notification-permission');
   const list = document.querySelector('#download-list');
   const summary = document.querySelector('#download-summary');
   const connection = document.querySelector('#download-connection');
-  const enable = document.querySelector('#enable-notifications');
   let storage;
   try { storage = window.localStorage; } catch { /* Session-only history below. */ }
   const history = createHistory(storage, () => {
@@ -15,28 +15,8 @@ export function initDownloadNotifications() {
   let checking = false;
   let timer;
 
-  function permissionStatus() {
-    const supported = window.isSecureContext && 'Notification' in window;
-    const permission = supported ? Notification.permission : 'unsupported';
-    permissionCopy.textContent = permission === 'granted'
-      ? 'Notify me after the first completed download. Keep this page open.'
-      : permission === 'denied'
-        ? 'Notifications are blocked. Allow them in your browser’s site settings; the dashboard still works.'
-        : permission === 'unsupported'
-          ? 'Browser notifications are unavailable here. Follow downloads in the dashboard.'
-          : 'Know when your file is received. Allow notifications and keep this page open.';
-    toggle.disabled = !supported || permission === 'denied';
-    enable.hidden = !supported || permission === 'granted' || permission === 'denied';
-    return permission;
-  }
-
-  async function requestPermission() {
-    if (permissionStatus() !== 'default') return;
-    try { await Notification.requestPermission(); } catch { /* Dashboard remains available. */ }
-    permissionStatus();
-  }
-  toggle.addEventListener('change', () => { if (toggle.checked) void requestPermission(); });
-  enable.addEventListener('click', () => { void requestPermission(); });
+  const notifications = createSystemNotifications();
+  const controls = initNotificationControls(notifications, history, storage);
 
   function render() {
     const entries = history.read();
@@ -54,6 +34,14 @@ export function initDownloadNotifications() {
         ? `Received ${new Date(entry.downloadedAt).toLocaleString()}`
         : `Sent ${new Date(entry.createdAt).toLocaleString()}`;
       details.append(name, time);
+      if (entry.downloadedAt) {
+        for (const line of downloadDetailLines(entry.downloadDetails)) {
+          const detail = document.createElement('small');
+          detail.className = 'download-detail';
+          detail.textContent = line;
+          details.append(detail);
+        }
+      }
       const badge = document.createElement('span');
       badge.className = `download-badge${entry.downloadedAt ? ' is-received' : ''}`;
       badge.textContent = downloadLabel(entry);
@@ -68,14 +56,14 @@ export function initDownloadNotifications() {
     }
   }
 
-  function notify(entry) {
+  async function notify(entry) {
+    if (!controls.enabled()) return true;
     try {
-      if (showDownloadNotification(entry, () => {
-        window.focus();
-        document.querySelector('#downloads').scrollIntoView({ behavior: 'smooth' });
-      })) history.update(entry.id, { notified: true });
+      if (await showDownloadNotification(entry, notifications)) history.update(entry.id, { notified: true });
+      return true;
     } catch {
-      permissionCopy.textContent = 'Browser notifications could not be shown. Follow downloads in the dashboard.';
+      controls.failed();
+      return false;
     }
   }
 
@@ -95,7 +83,9 @@ export function initDownloadNotifications() {
         }
       } catch { failed = true; }
     }
-    for (const entry of history.read()) notify(entry);
+    for (const entry of history.read()) {
+      if (!await notify(entry)) break;
+    }
     connection.textContent = failed ? 'Could not refresh some downloads. Retrying automatically…' : '';
     render();
   }
@@ -117,32 +107,21 @@ export function initDownloadNotifications() {
     }
   }
   window.addEventListener('storage', event => { if (event.key === HISTORY_KEY) render(); });
+  navigator.serviceWorker?.addEventListener('message', event => {
+    if (event.data?.type === 'show-downloads') document.querySelector('#downloads').scrollIntoView({ behavior: 'smooth' });
+  });
   window.addEventListener('online', () => { void check(); });
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) { permissionStatus(); void check(); }
+    if (!document.hidden) { controls.render(); void check(); }
   });
-  permissionStatus();
+  controls.render();
   render();
   void check();
   return {
     track(result, name) {
-      history.add(result, name, toggle.checked);
+      history.add(result, name, controls.enabled());
       render();
       void check();
     },
   };
-}
-
-export function showDownloadNotification(entry, onClick, NotificationApi = globalThis.Notification) {
-  if (!entry.downloadedAt || !entry.notify || entry.notified || NotificationApi?.permission !== 'granted') {
-    return false;
-  }
-  const notification = new NotificationApi('Your file was downloaded', {
-    body: entry.name, tag: `drop2-download-${entry.id}`,
-  });
-  notification.onclick = () => {
-    onClick();
-    notification.close();
-  };
-  return true;
 }

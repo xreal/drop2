@@ -1,3 +1,5 @@
+import { parseDownloadDetails } from './download-details.js';
+
 export const HISTORY_KEY = 'drop2.downloads.v1';
 export const MAX_HISTORY = 20;
 const RETENTION_MS = 7 * 86400_000;
@@ -48,13 +50,16 @@ export function createHistory(storage, onStorageError = () => {}) {
       const entry = {
         id: result.share_id, token: result.download_status_token,
         name: name.slice(0, 255), expiresAt: result.expires_at, createdAt: Date.now(),
-        state: 'ready', downloadedAt: null, notify, notified: false,
+        state: 'ready', downloadedAt: null, downloadDetails: null, notify, notified: false,
       };
       if (!entry.token) return;
       save([entry, ...read().filter(item => item.id !== entry.id)]);
     },
     update(id, changes) {
       save(read().map(entry => entry.id === id ? { ...entry, ...changes } : entry));
+    },
+    setNotifications(enabled) {
+      save(read().map(entry => ({ ...entry, notify: enabled })));
     },
     remove(id) { save(read().filter(entry => entry.id !== id)); },
   };
@@ -65,11 +70,15 @@ export function readDownloadStatus(body) {
       !(body.downloaded_at === null || (Number.isSafeInteger(body.downloaded_at) && body.downloaded_at > 0))) {
     throw new Error('Invalid download status');
   }
-  return { state: body.state, downloadedAt: body.downloaded_at, expiresAt: body.expires_at };
+  return {
+    state: body.state, downloadedAt: body.downloaded_at, expiresAt: body.expires_at,
+    downloadDetails: parseDownloadDetails(body.download_details),
+  };
 }
 
 export function needsDownloadCheck(entry) {
-  return !entry.downloadedAt && (entry.state === 'ready' || entry.state === 'uploading');
+  if (entry.downloadedAt) return !Object.hasOwn(entry, 'downloadDetails') && entry.state !== 'unavailable';
+  return entry.state === 'ready' || entry.state === 'uploading';
 }
 
 export function downloadLabel(entry) {

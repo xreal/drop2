@@ -172,6 +172,8 @@ async function main() {
   try {
     const ctx = detectShareContext();
     const info = await loadShareInfo(ctx);
+    const receiptNote = document.querySelector('#download-receipt-note');
+    if (receiptNote) receiptNote.hidden = info.mode !== 'stored';
     quickLink = info.mode === 'stored' && info.encryption_mode === 'none';
     if (ctx.mode === 'hosted' && info.mode === 'live' && ctx.capability?.length !== 32) {
       setStatus('Open the complete live share link, including the secret after #.', 'error');

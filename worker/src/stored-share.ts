@@ -1,3 +1,4 @@
+import { downloadDetails } from './download-details';
 import { hashToken } from './token-proof';
 import type { ShareKind, StoredShareStatus } from './protocol';
 import { verifyPin, pinRequired, validPinMaterial } from './pin';
@@ -398,13 +399,19 @@ export async function completeStoredDownload(
   }
 
   const now = Date.now();
+  const details = downloadDetails(request);
   const completion = await env.DB.prepare(
     `UPDATE stored_shares
      SET downloaded_at = COALESCE(downloaded_at, ?),
+         download_country = CASE WHEN downloaded_at IS NULL THEN ? ELSE download_country END,
+         download_region = CASE WHEN downloaded_at IS NULL THEN ? ELSE download_region END,
+         download_network = CASE WHEN downloaded_at IS NULL THEN ? ELSE download_network END,
+         download_asn = CASE WHEN downloaded_at IS NULL THEN ? ELSE download_asn END,
          state = CASE WHEN delete_after_complete = 1 THEN 'deleting' ELSE state END
      WHERE share_id = ? AND state = 'ready' AND download_token = ?
        AND download_token_expires_at >= ? AND expires_at > ?`,
-  ).bind(now, shareId, row.download_token, now, now).run();
+  ).bind(now, details.country, details.region, details.network, details.asn,
+    shareId, row.download_token, now, now).run();
   if (completion.meta.changes !== 1) {
     const current = await fetchRow(env, shareId);
     if (!current || !['deleting', 'deleted'].includes(current.state)) return unauthorized();

@@ -70,3 +70,34 @@ test('expired shares remain visible for seven days without reporting a download'
   assert.equal(row.download_status_token_hash, '');
   assert.equal(row.downloaded_at, null);
 });
+
+test('records only trusted coarse network details on the first receipt, preserves them on retry and prunes them', async () => {
+  const share = await runtime.uploadSmall();
+  const token = await access(share);
+  const headers = {'x-drop2-download-token':token, 'cf-ipcountry':'FR'};
+  const response = await runtime.request(share.base + '/download-complete', {
+    bytes_received:4, country:'US', region:'Fake', network:'Fake',
+  }, {headers, cf:{country:'DE', region:'Bavaria', asOrganization:'Example ISP', asn:64500, city:'Munich', latitude:'48.1'}});
+  assert.equal(response.status, 200);
+  const received = await (await status(share)).json();
+  assert.deepEqual(received.download_details, {country:'DE', region:'Bavaria', network:'Example ISP', asn:64500});
+  await runtime.request(share.base + '/download-complete', {bytes_received:4}, {
+    headers, cf:{country:'US', region:'Changed', asOrganization:'Changed', asn:64501},
+  });
+  assert.deepEqual((await (await status(share)).json()).download_details, received.download_details);
+  await runtime.sql('UPDATE stored_shares SET expires_at = ? WHERE share_id = ?', [Date.now() - 8 * 86400_000, share.share_id]);
+  await runtime.request('/_test/cleanup');
+  const [row] = await runtime.sql('SELECT download_country, download_region, download_network, download_asn FROM stored_shares WHERE share_id = ?', [share.share_id]);
+  assert.deepEqual(Object.values(row), [null, null, null, null]);
+});
+
+test('missing Cloudflare metadata stays unknown and never trusts request body or headers', async () => {
+  const share = await runtime.uploadSmall();
+  const token = await access(share);
+  const response = await runtime.request(share.base + '/download-complete', {bytes_received:4, country:'US'}, {
+    headers:{'x-drop2-download-token':token, 'cf-ipcountry':'US'}, cf:{country:null, region:null, asOrganization:null, asn:null},
+  });
+  assert.equal(response.status, 200);
+  const received = await (await status(share)).json();
+  assert.deepEqual(received.download_details, {country:null, region:null, network:null, asn:null});
+});

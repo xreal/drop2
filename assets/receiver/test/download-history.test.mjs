@@ -56,3 +56,23 @@ test('blocked browser storage falls back to usable session history', () => {
   assert.equal(downloadLabel(history.read()[0]), 'Downloaded');
   assert.equal(errors, 1);
 });
+
+test('enabling notifications includes existing receipts without replaying acknowledged ones', () => {
+  const history = createHistory(memoryStorage());
+  history.add(share(), 'report.pdf', false);
+  history.update('abc123', {downloadedAt:Date.now()});
+  history.setNotifications(true);
+  assert.equal(history.read()[0].notify, true);
+  assert.equal(history.read()[0].notified, false);
+  history.update('abc123', {notified:true});
+  history.setNotifications(false);
+  history.setNotifications(true);
+  assert.equal(history.read()[0].notified, true);
+});
+
+test('receipts saved before location support refresh once, then stop polling', () => {
+  const legacy = {state:'deleted', downloadedAt:123};
+  assert.equal(needsDownloadCheck(legacy), true);
+  const current = readDownloadStatus({state:'deleted', downloaded_at:123, expires_at:Date.now()});
+  assert.equal(needsDownloadCheck(current), false);
+});

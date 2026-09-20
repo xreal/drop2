@@ -194,11 +194,20 @@
         <section id="downloads" class="card downloads-card" aria-labelledby="downloads-title">
           <div class="downloads-heading">
             <div><h2 id="downloads-title">Your downloads</h2><p id="download-summary"></p></div>
-            <button id="enable-notifications" type="button" class="secondary-action compact" hidden>Allow notifications</button>
+
+          </div>
+          <div class="notification-settings">
+            <p id="notification-status" role="status"></p>
+            <div class="notification-actions">
+              <button id="enable-notifications" type="button" class="secondary-action compact" hidden>Enable notifications</button>
+              <button id="test-notification" type="button" class="secondary-action compact" hidden>Test notification</button>
+            </div>
+            <p id="notification-feedback" class="helper" role="status"></p>
           </div>
           <ul id="download-list" class="download-list"></ul>
           <p id="download-connection" class="status-message" role="status"></p>
           <p id="download-storage" class="helper">Your latest 20 shares, saved in this browser until 7 days after expiry. Removing an entry only clears its history.</p>
+          <p class="helper">Location and network are approximate, provided by Cloudflare. VPNs may show a different region or provider. Available for new downloads.</p>
           <p class="helper">“Downloaded” means the receiver confirmed full receipt. Keep this page open for automatic updates and notifications.</p>
         </section>
 

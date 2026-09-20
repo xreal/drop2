@@ -7,6 +7,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
 
 mkdirSync(dist, { recursive: true });
+copyFileSync(join(root, 'notification-worker.js'), join(dist, 'notification-worker.js'));
 copyFileSync(join(root, 'index.html'), join(dist, 'index.html'));
 copyFileSync(join(root, 'send.html'), join(dist, 'send.html'));
 copyFileSync(join(root, 'faq.html'), join(dist, 'faq.html'));

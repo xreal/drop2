@@ -53,6 +53,13 @@ export default {
       return handleAuthSession(request, env);
     }
 
+    if (url.pathname === '/notification-worker.js' && request.method === 'GET') {
+      const asset = await env.ASSETS.fetch(new Request('https://assets.local/notification-worker.js'));
+      const response = new Response(asset.body, asset);
+      response.headers.set('cache-control', 'no-cache');
+      return response;
+    }
+
     if (url.pathname.startsWith('/assets/')) {
       const assetPath = url.pathname.slice('/assets/'.length);
       const assetUrl = new URL(`/${assetPath}`, 'https://assets.local/');
