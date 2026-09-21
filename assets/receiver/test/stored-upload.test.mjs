@@ -13,10 +13,12 @@ function testFile(name, contents) {
   };
 }
 
-test('prepareStoredUpload creates PIN material by default', async () => {
+test('prepareStoredUpload defaults to two days with PIN protection', async () => {
   const prepared = await prepareStoredUpload(testFile('report.txt', 'hello'));
 
   assert.match(prepared.pin, /^\d{4}$/);
+  assert.equal(prepared.expiryMode, '2d');
+  assert.equal(prepared.createBody.expiry_mode, '2d');
   assert.notEqual(prepared.createBody.pin_salt, '');
   assert.notEqual(prepared.createBody.pin_hash, '');
 });
@@ -24,9 +26,11 @@ test('prepareStoredUpload creates PIN material by default', async () => {
 test('prepareStoredUpload supports a share without a PIN', async () => {
   const prepared = await prepareStoredUpload(testFile('report.txt', 'hello'), {
     pinRequired: false,
+    expiryMode: '1w',
   });
 
   assert.equal(prepared.pin, null);
+  assert.equal(prepared.createBody.expiry_mode, '1w');
   assert.equal(prepared.createBody.pin_salt, '');
   assert.equal(prepared.createBody.pin_hash, '');
 });

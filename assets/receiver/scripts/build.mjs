@@ -11,8 +11,13 @@ copyFileSync(join(root, 'notification-worker.js'), join(dist, 'notification-work
 copyFileSync(join(root, 'index.html'), join(dist, 'index.html'));
 copyFileSync(join(root, 'send.html'), join(dist, 'send.html'));
 copyFileSync(join(root, 'faq.html'), join(dist, 'faq.html'));
-copyFileSync(join(root, 'styles.css'), join(dist, 'styles.css'));
-copyFileSync(join(root, 'send.css'), join(dist, 'send.css'));
+await build({
+  entryPoints: [join(root, 'styles.css'), join(root, 'send.css')],
+  bundle: true,
+  outdir: dist,
+  minify: true,
+  target: ['es2020'],
+});
 
 await build({
   entryPoints: [join(root, 'src/app.js')],

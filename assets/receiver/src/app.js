@@ -310,6 +310,7 @@ async function main() {
         } else {
           setUiPhase('ready');
         }
+        if (!actionEl.disabled) actionEl.focus({ preventScroll: true });
       }
     });
   } catch (err) {

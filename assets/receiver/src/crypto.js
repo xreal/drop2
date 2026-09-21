@@ -9,6 +9,7 @@ import {
 import { downloadStoredShare, parseCapabilityFragment } from './stored-crypto.js';
 import { mapApiError, UserMsg } from './errors.js';
 import { createLiveAccess, completeLiveJoin, verifyLiveCompletion } from './live-crypto.js';
+import { requestPin } from './pin-dialog.js';
 
 const enc = new TextEncoder();
 
@@ -85,7 +86,7 @@ async function joinLocal({ info, onProgress, onStatus }) {
     client_public_key: b64urlEncode(publicKey),
   };
   if (info.pin_required) {
-    const pin = prompt('Enter 4-digit PIN');
+    const pin = await requestPin();
     if (!pin) throw new Error(UserMsg.PIN_REQUIRED);
     joinBody.pin = pin;
   }
@@ -127,7 +128,7 @@ async function joinHosted({ ctx, info, onProgress, onStatus }) {
   const privateKey = x25519.utils.randomPrivateKey();
   const accessBody = createLiveAccess(ctx.capability, ctx.shareId, privateKey);
   if (info.pin_required) {
-    const pin = prompt('Enter 4-digit PIN');
+    const pin = await requestPin();
     if (!pin) throw new Error(UserMsg.PIN_REQUIRED);
     accessBody.pin = pin;
   }

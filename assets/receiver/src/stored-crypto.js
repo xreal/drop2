@@ -7,6 +7,7 @@ import {
   finalizeEncryptedFrames,
 } from './frame-stream.js';
 import { mapApiError, UserMsg } from './errors.js';
+import { requestPin as showPinDialog } from './pin-dialog.js';
 
 const enc = new TextEncoder();
 
@@ -95,13 +96,14 @@ export async function downloadStoredShare({
   info,
   onProgress,
   onStatus,
+  requestPin = showPinDialog,
 }) {
   const encrypted = info.encryption_mode !== 'none';
   onStatus('Verifying access…');
 
   const accessBody = {};
   if (info.pin_required) {
-    const pin = prompt('Enter 4-digit PIN');
+    const pin = await requestPin();
     if (!pin) throw new Error(UserMsg.PIN_REQUIRED);
     accessBody.pin = pin;
   }

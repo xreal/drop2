@@ -1,7 +1,9 @@
 import { initDownloadNotifications } from './download-notifications.js';
+import { initTransferOptions } from './transfer-options.js';
 import {
   ANONYMOUS_BROWSER_SEND_LIMIT,
   AUTHENTICATED_BROWSER_SEND_LIMIT,
+  DEFAULT_BROWSER_SEND_EXPIRY,
   prepareStoredUpload,
   uploadPreparedStoredShare,
 } from './stored-upload.js';
@@ -14,10 +16,10 @@ const fileInputEl = document.querySelector('#file-input');
 const folderInputEl = document.querySelector('#folder-input');
 const chooseFilesEl = document.querySelector('#choose-files');
 const chooseFolderEl = document.querySelector('#choose-folder');
+const clearSelectionEl = document.querySelector('#clear-selection');
 const fileNameEl = document.querySelector('#file-name');
 const fileSummaryEl = document.querySelector('#file-summary');
 const fileReadyEl = document.querySelector('#file-ready');
-const fileChangeEl = document.querySelector('#file-change');
 const expiryEls = [...document.querySelectorAll('input[name="expiry"]')];
 const expiryGroupEl = document.querySelector('.option-group');
 const pinRequiredEl = document.querySelector('#pin-required');
@@ -58,6 +60,7 @@ const authLoginEl = document.querySelector('#auth-login');
 const authSignoutEl = document.querySelector('#auth-signout');
 
 const downloadNotifications = initDownloadNotifications();
+const transferOptions = initTransferOptions();
 
 const expiryLabels = {
   after_download: 'It will be deleted after the first completed download.',
@@ -70,7 +73,7 @@ const expiryLabels = {
 /** @type {import('./send-selection.js').SendSelection | null} */
 let selection = null;
 let busy = false;
-let previousExpiryMode = '1w';
+let previousExpiryMode = DEFAULT_BROWSER_SEND_EXPIRY;
 let quickModeApplied = false;
 let currentShare = null;
 let maxPlaintextBytes = ANONYMOUS_BROWSER_SEND_LIMIT;
@@ -89,6 +92,11 @@ chooseFilesEl?.addEventListener('click', () => {
 });
 chooseFolderEl?.addEventListener('click', () => {
   if (!busy) folderInputEl.click();
+});
+clearSelectionEl.addEventListener('click', () => {
+  if (busy) return;
+  setSelection(null);
+  chooseFilesEl.focus();
 });
 filePickerEl.addEventListener('click', (event) => {
   if (busy) return;
@@ -131,11 +139,12 @@ filePickerEl.addEventListener('drop', async (event) => {
 
 formEl.addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (busy) return;
   if (!selection || selectionSize(selection) === 0 || selectionSize(selection) > maxPlaintextBytes) {
     return;
   }
 
-  const expiryMode = expiryEls.find((input) => input.checked)?.value ?? '1w';
+  const expiryMode = expiryEls.find((input) => input.checked)?.value ?? DEFAULT_BROWSER_SEND_EXPIRY;
   const archive = selection.mode === 'archive';
   let quickLink = quickLinkEl.checked;
   if (archive && quickLink) {
@@ -246,7 +255,7 @@ function applyAuthSession() {
         'Signed in. Large sends need a GitHub account at least 180 days old with 2+ public repos.';
     } else {
       sendLimitCopyEl.textContent =
-        'Up to 10 MiB anonymously. Sign in with GitHub for up to 1 GiB.';
+        'Up to 10 MiB. No account needed. Sign in for more.';
     }
   }
 
@@ -278,13 +287,16 @@ function setSelection(next) {
   selection = next;
   setStatus('');
   filePickerEl.classList.toggle('has-file', Boolean(next));
+  uploadCardEl.classList.toggle('has-selection', Boolean(next));
+  document.querySelector('#send-actions').hidden = !next;
+  document.querySelector('#choose-files-label').textContent = next ? 'Change files' : 'Choose files';
+  clearSelectionEl.hidden = !next;
   fileReadyEl.hidden = !next;
-  fileChangeEl.hidden = !next;
   applyArchiveQuickLinkLock();
 
   if (!next) {
-    fileNameEl.textContent = 'Choose files or a folder';
-    fileSummaryEl.textContent = 'or drag and drop them here';
+    fileNameEl.textContent = 'A good place to drop.';
+    fileSummaryEl.textContent = 'Drag files or a folder here';
     updateSendButton();
     return;
   }
@@ -361,17 +373,20 @@ function showSuccess({ result, displayName, size, expiryMode, quickLink }) {
   setEmailStatus('');
   uploadCardEl.hidden = true;
   successEl.hidden = false;
+  document.querySelector('#email-options').open = false;
+  successEl.querySelector('.success-heading').focus({ preventScroll: true });
   trustStripEl.hidden = true;
   successEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function resetForm() {
   formEl.reset();
+  transferOptions.close();
   fileInputEl.value = '';
   folderInputEl.value = '';
   selection = null;
   currentShare = null;
-  previousExpiryMode = '1w';
+  previousExpiryMode = DEFAULT_BROWSER_SEND_EXPIRY;
   successEl.hidden = true;
   uploadCardEl.hidden = false;
   trustStripEl.hidden = false;
@@ -384,6 +399,7 @@ function resetForm() {
   setEmailStatus('');
   setSelection(null);
   applyQuickLinkMode();
+  chooseFilesEl.focus({ preventScroll: true });
   uploadCardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
@@ -450,6 +466,12 @@ function setEmailStatus(text, tone = 'default') {
 
 function setBusy(nextBusy) {
   busy = nextBusy;
+  uploadCardEl.setAttribute('aria-busy', String(nextBusy));
+  filePickerEl.setAttribute('aria-disabled', String(nextBusy));
+  filePickerEl.tabIndex = nextBusy ? -1 : 0;
+  clearSelectionEl.disabled = nextBusy;
+  sendButtonEl.classList.toggle('is-downloading', nextBusy);
+  if (nextBusy) transferOptions.close();
   fileInputEl.disabled = nextBusy;
   folderInputEl.disabled = nextBusy;
   chooseFilesEl && (chooseFilesEl.disabled = nextBusy);
@@ -501,13 +523,13 @@ function updateProgress({ phase, done, total }) {
   if (phase === 'package') setStatus('Packaging…', 'active');
   else if (phase === 'encrypt') setStatus('Encrypting in your browser…', 'active');
   else if (phase === 'prepare') setStatus('Preparing file…', 'active');
-  else if (phase === 'upload') setStatus('Uploading encrypted data…', 'active');
+  else if (phase === 'upload') setStatus(quickLinkEl.checked ? 'Uploading file…' : 'Uploading encrypted data…', 'active');
 }
 
 function applyQuickLinkMode() {
   const quickLink = quickLinkEl.checked;
   if (quickLink && !quickModeApplied) {
-    previousExpiryMode = expiryEls.find((input) => input.checked)?.value ?? '1w';
+    previousExpiryMode = expiryEls.find((input) => input.checked)?.value ?? DEFAULT_BROWSER_SEND_EXPIRY;
     const afterDownload = expiryEls.find((input) => input.value === 'after_download');
     if (afterDownload) afterDownload.checked = true;
     pinRequiredEl.checked = true;
@@ -522,8 +544,9 @@ function applyQuickLinkMode() {
   expiryGroupEl.setAttribute('aria-disabled', String(quickLink));
   securityNoteEl.lastChild.textContent = quickLink
     ? ' PIN protected. Not end-to-end encrypted; access expires within 2 hours.'
-    : ' End-to-end encrypted and never analyzed.';
-  buttonLabelEl.textContent = quickLink ? 'Create quick link' : 'Send securely';
+    : ' Your files, encrypted before they leave your device.';
+  buttonLabelEl.textContent = quickLink ? 'Create quick link' : 'Create secure link';
+  transferOptions.render();
   applyArchiveQuickLinkLock();
 }
 

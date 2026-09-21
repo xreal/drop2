@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Answers about drop2 file limits, privacy, expiry, and secure sharing." />
     <title>drop2.app — frequently asked questions</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%272%27 y=%272%27 width=%2721%27 height=%2721%27 rx=%276%27 fill=%27%232c233e%27/%3E%3Crect x=%2710%27 y=%2710%27 width=%2720%27 height=%2720%27 rx=%276%27 fill=%27%23a58ae0%27 fill-opacity=%27.9%27/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
   <body>
@@ -12,8 +13,7 @@
       <header class="site-header">
         <div class="header-inner">
           <a href="/" class="site-logo" aria-label="drop2.app home">
-            <span class="logo-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0L8 8m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg></span>
-            <span>drop2<span>.app</span></span>
+            <span class="logo-mark" aria-hidden="true"></span><span>drop2</span>
           </a>
           <nav class="site-nav" aria-label="Main navigation"><a href="/">Send</a><a href="/faq" aria-current="page">FAQ</a><a href="https://github.com/xreal/drop2" rel="noopener noreferrer">GitHub</a></nav>
         </div>
@@ -27,7 +27,7 @@
             <details><summary>Can I send multiple files or a folder?</summary><p>Yes. On the send page, choose multiple files or a folder (or drop them in). They are packaged in your browser as a zip and uploaded as one encrypted share. Short quick links stay single-file only.</p></details>
             <details><summary>How long does a link stay available?</summary><p>You choose when creating an encrypted share: delete it after the first completed download, or keep it for one day, two days, or one week. Short quick links are deleted after download and always expire within two hours.</p></details>
             <details><summary>Who can read my files?</summary><p>Encrypted shares can only be decrypted by someone with the complete link. Short quick links are an explicit exception: drop2 stores their contents without end-to-end encryption so the URL can be typed easily. They always require a separately shared PIN.</p></details>
-            <details><summary>Do I need to use a PIN?</summary><p>PIN protection is enabled by default for encrypted shares but can be turned off under Advanced options. A short quick link always requires a PIN because it has no decryption capability in the URL.</p></details>
+            <details><summary>Do I need to use a PIN?</summary><p>PIN protection is enabled by default for encrypted shares. Open the PIN control beneath the file picker to turn it off. A short quick link always requires a PIN because it has no decryption capability in the URL.</p></details>
             <details><summary>What about misuse or abuse?</summary><p>drop2 is for legitimate private file transfer, not public content hosting. Cross-share probing and repeated incorrect PIN attempts are rate-limited. Shares that violate acceptable use can be removed without inspecting their encrypted contents.</p></details>
             <details><summary>Can I send larger files?</summary><p>Yes. Sign in with GitHub on the send page for up to 1&nbsp;GiB per send (subject to eligibility and daily/weekly quotas), or use the open-source drop2 CLI for larger live or stored encrypted shares. Install it with <code>curl -fsSL https://raw.githubusercontent.com/xreal/drop2/main/scripts/install.sh | bash</code>.</p></details>
           </section>

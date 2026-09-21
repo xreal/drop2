@@ -108,7 +108,16 @@ export function initDownloadNotifications() {
   }
   window.addEventListener('storage', event => { if (event.key === HISTORY_KEY) render(); });
   navigator.serviceWorker?.addEventListener('message', event => {
-    if (event.data?.type === 'show-downloads') document.querySelector('#downloads').scrollIntoView({ behavior: 'smooth' });
+    if (event.data?.type === 'show-downloads') showHistory();
+  });
+  function showHistory() {
+    const downloads = document.querySelector('#downloads');
+    downloads.open = true;
+    downloads.scrollIntoView({ behavior: 'smooth' });
+  }
+  if (window.location.hash === '#downloads') showHistory();
+  window.addEventListener('hashchange', () => {
+    if (window.location.hash === '#downloads') showHistory();
   });
   window.addEventListener('online', () => { void check(); });
   document.addEventListener('visibilitychange', () => {

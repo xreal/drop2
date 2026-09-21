@@ -10,6 +10,7 @@ import { buildStoreZip } from './zip-store.js';
 export const STORED_CHUNK_PLAINTEXT_SIZE = 8 * 1024 * 1024;
 export const ANONYMOUS_BROWSER_SEND_LIMIT = 10 * 1024 * 1024;
 export const AUTHENTICATED_BROWSER_SEND_LIMIT = 1024 * 1024 * 1024;
+export const DEFAULT_BROWSER_SEND_EXPIRY = '2d';
 
 /**
  * @param {Blob & { name?: string }} file
@@ -27,7 +28,7 @@ export const AUTHENTICATED_BROWSER_SEND_LIMIT = 1024 * 1024 * 1024;
 export async function prepareStoredUpload(
   file,
   {
-    expiryMode = '1w',
+    expiryMode = DEFAULT_BROWSER_SEND_EXPIRY,
     pinRequired = true,
     quickLink = false,
     kind = 'file',

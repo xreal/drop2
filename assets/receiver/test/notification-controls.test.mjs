@@ -21,11 +21,12 @@ function setup(t, permission = 'granted') {
   return {node, storage, history, notifications};
 }
 
-test('dashboard enable activates existing receipts and survives the send-another reset', async t => {
+test('Options toggle updates existing receipts and preserves the preference through reset', async t => {
   const {node, storage, history, notifications} = setup(t);
   storage.setItem('drop2.notifications.enabled', 'false');
   initNotificationControls(notifications, history, storage);
-  node('#enable-notifications').handlers.click();
+  node('#download-notification').checked = true;
+  node('#download-notification').handlers.change();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(history.read()[0].notify, true);
   assert.equal(storage.getItem('drop2.notifications.enabled'), 'true');
@@ -33,15 +34,20 @@ test('dashboard enable activates existing receipts and survives the send-another
   node('#send-form').handlers.reset();
   await new Promise(resolve => queueMicrotask(resolve));
   assert.equal(node('#download-notification').checked, true);
+  node('#download-notification').checked = false;
+  node('#download-notification').handlers.change();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(history.read()[0].notify, false);
+  assert.equal(storage.getItem('drop2.notifications.enabled'), 'false');
 });
 
 test('notification delivery failures are visible in the dashboard', async t => {
   const {node, storage, history, notifications} = setup(t);
-  notifications.show = async () => { throw new Error('OS blocked'); };
-  initNotificationControls(notifications, history, storage);
-  await node('#test-notification').handlers.click();
-  assert.match(node('#notification-feedback').textContent, /could not show the test notification/);
-  assert.equal(node('#test-notification').disabled, false);
+  const controls = initNotificationControls(notifications, history, storage);
+  controls.failed();
+  assert.match(node('#notification-feedback').textContent, /A download notification could not be shown/);
+  assert.match(node('#notification-feedback').textContent, /browser and system notification settings/);
+  assert.equal(node('#download-notification').disabled, false);
 });
 
 test('denied permission is visible and cannot silently enable notifications', async t => {

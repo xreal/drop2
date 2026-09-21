@@ -2,8 +2,6 @@ const PREFERENCE_KEY = 'drop2.notifications.enabled';
 
 export function initNotificationControls(notifications, history, storage) {
   const toggle = document.querySelector('#download-notification');
-  const enable = document.querySelector('#enable-notifications');
-  const test = document.querySelector('#test-notification');
   const status = document.querySelector('#notification-status');
   const feedback = document.querySelector('#notification-feedback');
   const copy = document.querySelector('#notification-permission');
@@ -20,16 +18,11 @@ export function initNotificationControls(notifications, history, storage) {
       : permission === 'denied'
         ? 'Notifications blocked. Allow notifications for drop2.app in your browser’s site settings.'
         : enabled && permission === 'granted'
-          ? 'System notifications on for your downloads in this browser.'
-          : 'System notifications off. Enable them to hear when your files arrive.';
+          ? 'Notifications on. Keep this page open.'
+          : 'Notifications off. Enable them in Options when sending.';
     copy.textContent = 'System notifications for your downloads. Remembered in this browser; keep this page open.';
     toggle.checked = enabled;
     toggle.disabled = busy || !available;
-    enable.hidden = !available;
-    enable.disabled = busy;
-    enable.textContent = enabled && permission === 'granted' ? 'Turn off notifications' : 'Enable notifications';
-    test.hidden = !available;
-    test.disabled = busy;
   }
 
   async function setEnabled(next) {
@@ -50,21 +43,6 @@ export function initNotificationControls(notifications, history, storage) {
   }
 
   toggle.addEventListener('change', () => { void setEnabled(toggle.checked); });
-  enable.addEventListener('click', () => { void setEnabled(!enabled || notifications.permission() !== 'granted'); });
-  test.addEventListener('click', async () => {
-    if (!await setEnabled(true)) return;
-    busy = true;
-    render();
-    try {
-      await notifications.show('drop2 notifications are ready', {
-        body: 'You will receive a system notification when your file is downloaded.',
-        tag: 'drop2-notification-test', renotify: true,
-      });
-      feedback.textContent = 'Test sent to your system. No banner? Check notifications for Brave/your browser in system settings and turn off Focus or Do Not Disturb.';
-    } catch {
-      feedback.textContent = 'The browser could not show the test notification. Check site permissions and system notification settings, then try again.';
-    } finally { busy = false; render(); }
-  });
   document.querySelector('#send-form').addEventListener('reset', () => { queueMicrotask(render); });
   window.addEventListener('storage', event => {
     if (event.key === PREFERENCE_KEY) { enabled = event.newValue === 'true'; render(); }
@@ -74,6 +52,6 @@ export function initNotificationControls(notifications, history, storage) {
   return {
     enabled: () => enabled,
     render,
-    failed() { feedback.textContent = 'A download notification could not be shown. Use “Test notification” to check your browser and system settings. Retrying automatically.'; },
+    failed() { feedback.textContent = 'A download notification could not be shown. Check your browser and system notification settings. Retrying automatically.'; },
   };
 }

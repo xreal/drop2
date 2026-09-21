@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, statSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,6 +28,15 @@ for (const name of required) {
 
 test('app.bundle.js contains bundled application code', async () => {
   const path = join(dist, 'app.bundle.js');
-  const text = await import('node:fs/promises').then((fs) => fs.readFile(path, 'utf8'));
+  const text = await readFile(path, 'utf8');
   assert.ok(text.length > 10_000, 'bundle too small');
+});
+
+test('stylesheets are self-contained for the offline embedded receiver', async () => {
+  for (const name of ['styles.css', 'send.css']) {
+    const css = await readFile(join(dist, name), 'utf8');
+    assert.doesNotMatch(css, /@import\b/);
+    assert.doesNotMatch(css, /url\(\s*['"]?https?:/);
+    assert.ok(css.length > 1000, `${name} is missing bundled styles`);
+  }
 });

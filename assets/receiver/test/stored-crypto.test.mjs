@@ -130,11 +130,10 @@ test('downloads plaintext and defers completion until the caller saves it', asyn
     chunk_count: 1,
   }));
   const originalFetch = globalThis.fetch;
-  const originalPrompt = globalThis.prompt;
   let completeCalls = 0;
-  globalThis.prompt = () => '1234';
   globalThis.fetch = async (url, options = {}) => {
     if (url.endsWith('/access')) {
+      assert.equal(JSON.parse(options.body).pin, '1234');
       return Response.json({
         download_token: 'token',
         name: 'note.txt',
@@ -158,6 +157,7 @@ test('downloads plaintext and defers completion until the caller saves it', asyn
       info: { pin_required: true, encryption_mode: 'none' },
       onProgress() {},
       onStatus() {},
+      requestPin: async () => '1234',
     });
     assert.deepEqual(transfer.bytes, contents);
     assert.equal(completeCalls, 0);
@@ -165,6 +165,21 @@ test('downloads plaintext and defers completion until the caller saves it', asyn
     assert.equal(completeCalls, 1);
   } finally {
     globalThis.fetch = originalFetch;
-    globalThis.prompt = originalPrompt;
+  }
+});
+
+test('cancelling PIN entry never requests access or starts a download', async () => {
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = async () => { requests++; throw new Error('Unexpected request'); };
+  try {
+    await assert.rejects(downloadStoredShare({
+      shareId: 'abc123', capabilityBytes: null,
+      info: { pin_required: true, encryption_mode: 'none' },
+      onProgress() {}, onStatus() {}, requestPin: async () => null,
+    }), /PIN required/);
+    assert.equal(requests, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });

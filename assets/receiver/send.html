@@ -3,141 +3,86 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Send files or folders with an encrypted link, or a short PIN-protected quick link for a single file. No account needed." />
-    <title>drop2.app — send files simply</title>
+    <meta name="theme-color" content="#efecfa" />
+    <meta name="description" content="A little drop. A big delivery. Share files and folders with an encrypted, expiring link. No account needed." />
+    <title>drop2 — a little drop. a big delivery.</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%272%27 y=%272%27 width=%2721%27 height=%2721%27 rx=%276%27 fill=%27%232c233e%27/%3E%3Crect x=%2710%27 y=%2710%27 width=%2720%27 height=%2720%27 rx=%276%27 fill=%27%23a58ae0%27 fill-opacity=%27.9%27/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/assets/styles.css" />
     <link rel="stylesheet" href="/assets/send.css" />
   </head>
   <body>
+    <a class="skip-link" href="#send-form">Skip to file transfer</a>
     <div class="page">
       <header class="site-header">
         <div class="header-inner">
-          <a href="/" class="site-logo" aria-label="drop2.app home">
-            <span class="logo-mark" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0L8 8m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
-            </span>
-            <span>drop2<span>.app</span></span>
-          </a>
+          <a href="/" class="site-logo" aria-label="drop2 home"><span class="logo-mark" aria-hidden="true"></span><span>drop2</span></a>
+          <span class="brand-note">a little less friction.</span>
           <nav class="site-nav" aria-label="Main navigation">
-            <a href="/" aria-current="page">Send</a>
-            <a href="#downloads">Downloads</a>
-            <a href="/faq">FAQ</a>
-            <a href="https://github.com/xreal/drop2" rel="noopener noreferrer">GitHub</a>
+            <a href="/faq">How it works</a>
+            <a class="github-link" href="https://github.com/xreal/drop2" rel="noopener noreferrer" aria-label="drop2 on GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4.3 1.3-4.3-2-6-2m12 5v-3.9a3.4 3.4 0 0 0-.9-2.7c3-.3 6.2-1.5 6.2-6.9a5.4 5.4 0 0 0-1.5-3.8 5 5 0 0 0-.1-3.8s-1.2-.4-3.9 1.5a13.4 13.4 0 0 0-7 0C5.1.5 3.9.9 3.9.9a5 5 0 0 0-.1 3.8 5.4 5.4 0 0 0-1.5 3.8c0 5.4 3.2 6.6 6.2 6.9a3.4 3.4 0 0 0-.9 2.7V22"/></svg></a>
             <span id="auth-slot" class="auth-slot">
-              <a id="auth-signin" class="auth-link" href="/auth/github/start">Sign in with GitHub</a>
-              <span id="auth-user" class="auth-user" hidden>
-                <span id="auth-login" class="auth-login"></span>
-                <button id="auth-signout" type="button" class="auth-link auth-signout">Sign out</button>
-              </span>
+              <a id="auth-signin" class="auth-link" href="/auth/github/start" aria-label="Sign in with GitHub">Sign in <span aria-hidden="true">↗</span></a>
+              <span id="auth-user" class="auth-user" hidden><span id="auth-login" class="auth-login"></span><button id="auth-signout" type="button" class="auth-link">Sign out</button></span>
             </span>
           </nav>
         </div>
       </header>
-
       <main class="send-main">
         <section class="hero" aria-labelledby="page-title">
-          <p class="eyebrow">Private file transfer</p>
-          <h1 id="page-title">Send large files, <span>simply.</span></h1>
-          <p>Encrypted by default. No account, no clutter, just a link that disappears when it should.</p>
+          <p class="privacy-pill"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></svg><span>Private by default</span></p>
+          <h1 id="page-title">A little drop.<br class="mobile-break" /> A big delivery.</h1>
+          <p>Files, folders, good things. Send them on.</p>
         </section>
-
-        <section id="upload-card" class="card upload-card" aria-labelledby="send-title">
-          <div class="card-heading">
-            <span class="heading-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0L8 8m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
-            </span>
-            <div>
-              <h2 id="send-title">Send files</h2>
-              <p id="send-limit-copy">Up to 10 MiB anonymously. Sign in with GitHub for up to 1 GiB.</p>
-            </div>
-          </div>
-
+        <section id="upload-card" class="card upload-card" aria-label="New transfer">
+          <div class="card-heading"><span class="eyebrow">New transfer</span><span id="encryption-badge" class="encryption-badge"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></svg> Encrypted</span></div>
           <form id="send-form" class="send-form">
-            <div id="file-picker" class="file-picker" tabindex="0" role="button" aria-controls="file-input">
-              <input id="file-input" type="file" class="visually-hidden" multiple />
-              <input id="folder-input" type="file" class="visually-hidden" webkitdirectory directory multiple />
-              <span class="picker-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0L8 8m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
-              </span>
-              <span class="picker-copy">
-                <strong id="file-name">Choose files or a folder</strong>
-                <span id="file-summary">or drag and drop them here</span>
-              </span>
-              <span id="file-ready" class="ready-chip" hidden>Ready</span>
-              <span id="file-change" class="change-label" hidden>Change</span>
+            <input id="file-input" type="file" hidden multiple />
+            <input id="folder-input" type="file" hidden webkitdirectory directory multiple />
+            <div id="file-picker" class="file-picker" tabindex="0" role="button" aria-label="Choose files or drop them here" aria-controls="file-input">
+              <span class="folder-art" aria-hidden="true"><span class="folder-back"></span><span class="folder-sheet sheet-photo"></span><span class="folder-sheet sheet-note"></span><span class="folder-front"><svg viewBox="0 0 24 24"><path d="M12 17V7m-4 4 4-4 4 4"/></svg></span></span>
+              <span class="picker-copy"><strong id="file-name">A good place to drop.</strong><span id="file-summary">Drag files or a folder here</span></span>
+              <span id="file-ready" class="ready-chip" hidden>Ready to send</span>
             </div>
             <div class="picker-actions">
-              <button id="choose-files" type="button" class="secondary-action compact">Choose files</button>
-              <button id="choose-folder" type="button" class="secondary-action compact">Choose folder</button>
+              <button id="choose-files" type="button" class="primary-action"><span aria-hidden="true">＋</span><span id="choose-files-label">Choose files</span></button>
+              <button id="choose-folder" type="button" class="secondary-action folder-action" aria-label="Choose folder" title="Choose folder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm0 2h18"/></svg></button>
+              <button id="clear-selection" type="button" class="secondary-action" hidden aria-label="Clear selected files">Clear</button>
             </div>
-
-            <fieldset class="option-group">
-              <legend>
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
-                Delete
-              </legend>
-              <div class="expiry-grid">
-                <label><input type="radio" name="expiry" value="after_download" /><span>After download</span></label>
-                <label><input type="radio" name="expiry" value="1d" /><span>1 day</span></label>
-                <label><input type="radio" name="expiry" value="2d" /><span>2 days</span></label>
-                <label><input type="radio" name="expiry" value="1w" checked /><span>1 week</span></label>
-              </div>
-            </fieldset>
-
-            <details class="advanced">
-              <summary>
-                <span><span class="summary-icon" aria-hidden="true">✦</span> Advanced options</span>
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-              </summary>
-              <div class="advanced-list">
-                <label class="option-row" for="quick-link">
-                  <span class="row-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.1 1.1M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.1-1.1" /></svg>
-                  </span>
-                  <span class="row-copy"><strong>Short quick link</strong><small>Not end-to-end encrypted. PIN required; deleted after download or within 2 hours.</small></span>
-                  <span class="toggle"><input id="quick-link" type="checkbox" /><span></span></span>
-                </label>
-                <label class="option-row" for="pin-required">
-                  <span class="row-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
-                  </span>
-                  <span class="row-copy"><strong>Require a PIN</strong><small>Generate a separate 4-digit access code.</small></span>
-                  <span class="toggle"><input id="pin-required" type="checkbox" checked /><span></span></span>
-                </label>
-                <label class="option-row" for="download-notification">
-                  <span class="row-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
-                  </span>
-                  <span class="row-copy"><strong>Download notification</strong><small id="notification-permission">Know when your file is received. Keep this page open.</small></span>
-                  <span class="toggle"><input id="download-notification" type="checkbox" /><span></span></span>
-                </label>
-              </div>
-            </details>
-
-            <p id="status" class="status-message" role="status"></p>
-            <div id="progress-wrap" class="progress-wrap" hidden>
-              <div class="progress-track" aria-hidden="true"><div id="progress-fill" class="progress-fill"></div></div>
-              <p id="progress-label" class="progress-label"></p>
+            <p id="send-limit-copy" class="send-limit">Up to 10 MiB. No account needed.</p>
+            <div class="transfer-feedback"><p id="status" class="status-message" role="status"></p><div id="progress-wrap" class="progress-wrap" hidden><div class="progress-track" aria-hidden="true"><div id="progress-fill" class="progress-fill"></div></div><p id="progress-label" class="progress-label"></p></div></div>
+            <div class="transfer-toolbar">
+              <details class="transfer-option" name="transfer-settings" id="expiry-options">
+                <summary><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span id="expiry-summary">2 days</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></summary>
+                <div class="option-panel">
+                  <fieldset class="option-group"><legend>When should this disappear?</legend><p class="option-description">A little time, or just one download.</p><div class="expiry-grid">
+                    <label><input type="radio" name="expiry" value="after_download" /><span>After download</span></label>
+                    <label><input type="radio" name="expiry" value="1d" /><span>1 day</span></label>
+                    <label><input type="radio" name="expiry" value="2d" checked /><span>2 days</span></label>
+                    <label><input type="radio" name="expiry" value="1w" /><span>1 week</span></label>
+                  </div></fieldset>
+                </div>
+              </details>
+              <details class="transfer-option" name="transfer-settings" id="pin-options">
+                <summary><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></svg><span id="pin-summary">PIN on</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></summary>
+                <div class="option-panel"><label class="option-row" for="pin-required"><span class="row-copy"><strong>Require a PIN</strong><small>A separate 4-digit code. Share it through another channel.</small></span><span class="toggle"><input id="pin-required" type="checkbox" checked /><span></span></span></label></div>
+              </details>
+              <details class="transfer-option advanced" name="transfer-settings" id="more-options">
+                <summary><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h5m4 0h7M4 17h9m4 0h3"/><circle cx="11" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg><span>Options</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></summary>
+                <div class="option-panel advanced-list">
+                  <label class="option-row" for="download-notification"><span class="row-copy"><strong>Let me know when it arrives</strong><small id="notification-permission">Download notifications. Keep this page open.</small></span><span class="toggle"><input id="download-notification" type="checkbox" /><span></span></span></label>
+                  <label class="option-row" for="quick-link"><span class="row-copy"><strong>Short quick link</strong><small>Not end-to-end encrypted: drop2 can read the file. PIN required. Deleted after download or within 2 hours.</small></span><span class="toggle"><input id="quick-link" type="checkbox" /><span></span></span></label>
+                </div>
+              </details>
             </div>
-
-            <div class="form-actions">
-              <p id="security-note">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 4 7v6c0 5 3.5 7 8 8 4.5-1 8-3 8-8V7z" /><path d="m9 12 2 2 4-4" /></svg>
-                End-to-end encrypted and never analyzed.
-              </p>
-              <button id="send-button" type="submit" class="primary-action" disabled>
-                <span id="btn-icon" class="btn-icon" aria-hidden="true"></span>
-                <span id="btn-label">Send securely</span>
-              </button>
-            </div>
+            <div class="form-actions" id="send-actions" hidden><button id="send-button" type="submit" class="primary-action" disabled><span id="btn-label">Create secure link</span><span id="btn-icon" class="btn-icon" aria-hidden="true"></span></button></div>
+            <p id="security-note" class="security-note"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></svg> Your files, encrypted before they leave your device.</p>
           </form>
         </section>
-
         <section id="success" class="success-stack" hidden aria-labelledby="success-title">
           <div class="card success-card">
-            <div class="success-heading">
+            <div class="success-heading" tabindex="-1">
               <span class="success-icon" aria-hidden="true">✓</span>
-              <h2 id="success-title">Your file is ready to share</h2>
+              <h2 id="success-title">Good to go. Pass it on.</h2>
               <p id="success-expiry">The encrypted link is ready.</p>
             </div>
             <div class="success-file">
@@ -156,13 +101,13 @@
               <p id="share-helper" class="helper"></p>
             </div>
           </div>
-          <div class="card email-card">
-            <div class="email-heading">
+          <details class="card email-card" id="email-options">
+            <summary class="email-heading">
               <span class="heading-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none"><path d="M4 4h16v16H4zM4 7l8 6 8-6" /></svg>
               </span>
-              <div><strong>Send to recipients</strong><p>Each recipient gets a separate private email.</p></div>
-            </div>
+              <div><strong>Send by email</strong><p>Each recipient gets a separate private email.</p></div>
+            </summary>
             <form id="email-form" class="email-form">
               <label class="field" for="email-recipients">
                 <span class="field-label">Recipients</span>
@@ -187,39 +132,22 @@
               <span aria-hidden="true">✓</span>
               <div><strong>Email queued</strong><p id="email-complete-copy"></p></div>
             </div>
-          </div>
+          </details>
           <button id="send-another" type="button" class="secondary-action another-action">↻ Send another file</button>
         </section>
 
-        <section id="downloads" class="card downloads-card" aria-labelledby="downloads-title">
-          <div class="downloads-heading">
-            <div><h2 id="downloads-title">Your downloads</h2><p id="download-summary"></p></div>
-
+        <details id="downloads" class="card downloads-card">
+          <summary class="downloads-heading"><span class="history-icon" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span><strong id="downloads-title">Recent transfers</strong><span id="download-summary"></span></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></summary>
+          <div class="downloads-content">
+            <ul id="download-list" class="download-list"></ul>
+            <div class="notification-settings"><p id="notification-status" role="status"></p><p id="notification-feedback" class="helper" role="status"></p></div>
+            <p id="download-connection" class="status-message" role="status"></p>
+            <details class="history-info"><summary>About this history</summary><p id="download-storage" class="helper">Your latest 20 shares, saved in this browser until 7 days after expiry. Removing an entry only clears its history.</p><p class="helper">Location and network are approximate, provided by Cloudflare. VPNs may show a different region or provider.</p><p class="helper">“Downloaded” means the receiver confirmed full receipt. Keep this page open for automatic updates and notifications.</p></details>
           </div>
-          <div class="notification-settings">
-            <p id="notification-status" role="status"></p>
-            <div class="notification-actions">
-              <button id="enable-notifications" type="button" class="secondary-action compact" hidden>Enable notifications</button>
-              <button id="test-notification" type="button" class="secondary-action compact" hidden>Test notification</button>
-            </div>
-            <p id="notification-feedback" class="helper" role="status"></p>
-          </div>
-          <ul id="download-list" class="download-list"></ul>
-          <p id="download-connection" class="status-message" role="status"></p>
-          <p id="download-storage" class="helper">Your latest 20 shares, saved in this browser until 7 days after expiry. Removing an entry only clears its history.</p>
-          <p class="helper">Location and network are approximate, provided by Cloudflare. VPNs may show a different region or provider. Available for new downloads.</p>
-          <p class="helper">“Downloaded” means the receiver confirmed full receipt. Keep this page open for automatic updates and notifications.</p>
-        </section>
-
-        <div id="trust-strip" class="trust-strip" aria-label="Service qualities">
-          <span>Encrypted by default</span><span>Expiring links</span><span>Direct and anonymous</span>
-        </div>
+        </details>
+        <p id="trust-strip" class="trust-strip">A link to share. No account to create. Nothing to overthink.</p>
       </main>
-
-      <footer class="site-footer">
-        <p>© 2026 drop2.app — made for sending files, not storing them.</p>
-        <nav aria-label="Footer navigation"><a href="/">Send</a><a href="/faq">FAQ</a><a href="https://github.com/xreal/drop2" rel="noopener noreferrer">GitHub</a></nav>
-      </footer>
+      <footer class="site-footer"><p class="terminal-note"><span aria-hidden="true">⌘</span> At home in your terminal, too. <a href="https://github.com/xreal/drop2#install" aria-label="Install the drop2 command line tool"><code>$ drop2 file.zip</code><span aria-hidden="true">↗</span></a></p><p>Made to send. Not to stay.</p></footer>
     </div>
     <script type="module" src="/assets/send.bundle.js"></script>
   </body>
