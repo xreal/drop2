@@ -19,6 +19,7 @@
 - [ ] Stored shares encrypt locally before upload; DEK wrapped with capability secret
 - [ ] PIN is an access gate only, not the primary decryption secret for stored shares
 - [ ] Encrypted chunk and manifest integrity is authenticated (AEAD tags)
+- [x] One-time secrets (`/secret`) encrypt with AES-256-GCM in the browser; the key stays in the URL fragment and the Worker stores only ciphertext plus token hashes (see `docs/SECRETS.md`)
 - [ ] Plaintext quick links are explicitly marked and cannot bypass mandatory PIN, first-completed-download deletion, or two-hour limits
 
 ### Client-side authority
@@ -32,6 +33,7 @@
 - [ ] Internet live shares require PIN by default
 - [ ] PIN verification uses salted hashes, not plaintext storage
 - [x] Hosted PIN checks atomically reserve attempts before verification: at most 3 failed/in-flight checks per IP/share and 20 per IP across shares in a 15-minute window; successful checks refund only their own attempts
+- [x] Secret reveals are a single atomic `DELETE … RETURNING`; passphrase checks are server-gated with 5 attempts per secret, and only holders of the full link can spend them
 - [x] LAN PIN checks use a serialized share-wide budget: 3 failures trigger a 15-minute cooldown
 - [ ] Join tokens are short-lived and bound to session state
 - [ ] One active receiver per live share (MVP)
@@ -69,7 +71,7 @@ The relay receives proofs, never the capability. This protects against key subst
 ## Known accepted limits
 
 - 4-digit PINs are not strong cryptographic protection alone
-- 6-character Share IDs are locators, not secrets
+- 6-character Share IDs and 12-character secret IDs are locators, not secrets
 - Browser quick links are not end-to-end encrypted; the Worker and R2 can read their contents
 - Traffic analysis (timing, sizes, IPs) is not fully hidden
 - Compromised sender/receiver endpoints are out of scope

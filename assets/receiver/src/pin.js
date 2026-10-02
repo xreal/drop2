@@ -1,6 +1,6 @@
 import { pbkdf2 } from '@noble/hashes/pbkdf2';
 import { sha256 } from '@noble/hashes/sha256';
-import { b64urlEncode } from './stored-crypto.js';
+import { b64urlEncode } from './base64url.js';
 
 const ITERATIONS = 100_000;
 

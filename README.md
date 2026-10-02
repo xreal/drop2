@@ -29,6 +29,7 @@ The hosted service and LAN relay never see your plaintext. Encryption happens on
 - **Live or stored** — stream while you are online, or upload an encrypted copy that expires after five days by default
 - **Browser-first receiving** — receivers use a zero-install web page; CLI fallback with `drop2 get`
 - **Optional quick links** — the browser can create a short, mandatory-PIN link that is not end-to-end encrypted and expires within two hours
+- **One-time secrets**: share a password or note at [drop2.app/secret](https://drop2.app/secret); it is encrypted in your browser and opens once
 
 ## Share modes
 

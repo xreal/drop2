@@ -7,7 +7,7 @@ import {
   sendRecipientEmails,
   validShareUrl,
 } from './email-content';
-import { reserveEmailMessages } from './email-rate-limit';
+import { EMAIL_QUOTA, reserveIpQuota } from './ip-quota';
 import { verifyPin } from './pin';
 
 interface EmailNotifyEnv {
@@ -87,7 +87,7 @@ export async function notifyStoredShare(
   if (!reserved) return jsonError('email recipient limit reached', 429);
 
   const requestedMessages = payload.recipients.length * (payload.sendPinSeparately ? 2 : 1);
-  if (!(await reserveEmailMessages(env, request, requestedMessages))) {
+  if (!(await reserveIpQuota(env, request, EMAIL_QUOTA, requestedMessages))) {
     await refundShareRecipients(env, shareId, payload.recipients.length);
     return jsonError('email rate limit reached', 429);
   }

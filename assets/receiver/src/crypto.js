@@ -10,21 +10,9 @@ import { downloadStoredShare, parseCapabilityFragment } from './stored-crypto.js
 import { mapApiError, UserMsg } from './errors.js';
 import { createLiveAccess, completeLiveJoin, verifyLiveCompletion } from './live-crypto.js';
 import { requestPin } from './pin-dialog.js';
+import { b64urlDecode, b64urlEncode } from './base64url.js';
 
 const enc = new TextEncoder();
-
-function b64urlEncode(bytes) {
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function b64urlDecode(str) {
-  const pad = str.length % 4 === 0 ? '' : '='.repeat(4 - (str.length % 4));
-  const b64 = str.replace(/-/g, '+').replace(/_/g, '/') + pad;
-  const bin = atob(b64);
-  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
-}
 
 function deriveContentKey(sharedSecret) {
   return hkdf(sha256, sharedSecret, undefined, enc.encode('drop2.v1.content'), 32);

@@ -1,6 +1,7 @@
 import { pruneDownloadStatus } from './download-status';
 import { pruneGlobalIpAbuse, type AccessGuardEnv } from './access-guard';
-import { pruneEmailRateLimits } from './email-rate-limit';
+import { pruneIpQuotas } from './ip-quota';
+import { pruneExpiredSecrets } from './secret-store';
 
 const UPLOAD_STALE_MS = 24 * 60 * 60 * 1000;
 const R2_LIST_LIMIT = 1000;
@@ -15,12 +16,13 @@ interface ExpiredRow {
   state: string;
 }
 
-/** Scheduled cleanup: expire stale uploads, delete R2 objects, prune abuse rows. */
+/** Scheduled cleanup: expire stale uploads, delete R2 objects and expired secrets, prune abuse rows. */
 export async function runCleanup(env: CleanupEnv): Promise<void> {
   await expireStaleUploads(env);
   await deleteExpiredStoredObjects(env);
   await pruneGlobalIpAbuse(env);
-  await pruneEmailRateLimits(env);
+  await pruneIpQuotas(env);
+  await pruneExpiredSecrets(env);
   await pruneDownloadStatus(env);
 }
 

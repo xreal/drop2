@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createLiveAccess, completeLiveJoin, verifyLiveCompletion } from '../src/live-crypto.js';
-import { b64urlDecode, b64urlEncode } from '../src/stored-crypto.js';
+import { b64urlDecode, b64urlEncode } from '../src/base64url.js';
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/live-handshake.json', import.meta.url)));
 const capability = b64urlDecode(fixture.capability);

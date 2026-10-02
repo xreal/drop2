@@ -8,8 +8,6 @@
 .success-file strong { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
 .success-file small { color: var(--muted); font-size: 11px; }
 .share-fields { display: flex; flex-direction: column; gap: 18px; padding: 24px 26px; }
-.copy-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; }
-.copy-row .control { text-overflow: ellipsis; }
 .pin-control { font-size: 20px; letter-spacing: 7px; font-weight: 550; }
 .email-card { border-radius: 18px; background: #ffffff6b; }
 .email-heading { display: flex; align-items: center; gap: 12px; padding: 17px 20px; }
@@ -41,4 +39,3 @@
   .email-actions > small { max-width: none; }
   .email-form .control { font-size: 16px; }
 }
-@media (max-width: 370px) { .copy-row { grid-template-columns: 1fr; } }

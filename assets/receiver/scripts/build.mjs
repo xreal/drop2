@@ -11,8 +11,9 @@ copyFileSync(join(root, 'notification-worker.js'), join(dist, 'notification-work
 copyFileSync(join(root, 'index.html'), join(dist, 'index.html'));
 copyFileSync(join(root, 'send.html'), join(dist, 'send.html'));
 copyFileSync(join(root, 'faq.html'), join(dist, 'faq.html'));
+copyFileSync(join(root, 'secret.html'), join(dist, 'secret.html'));
 await build({
-  entryPoints: [join(root, 'styles.css'), join(root, 'send.css')],
+  entryPoints: [join(root, 'styles.css'), join(root, 'send.css'), join(root, 'secret.css')],
   bundle: true,
   outdir: dist,
   minify: true,
@@ -39,4 +40,14 @@ await build({
   target: ['es2020'],
 });
 
-console.log('built receiver/send dist/');
+await build({
+  entryPoints: [join(root, 'src/secret-app.js')],
+  bundle: true,
+  format: 'esm',
+  outfile: join(dist, 'secret.bundle.js'),
+  minify: true,
+  sourcemap: false,
+  target: ['es2020'],
+});
+
+console.log('built receiver/send/secret dist/');

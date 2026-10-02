@@ -26,9 +26,14 @@
 .field { display: flex; flex-direction: column; gap: 7px; }
 .field-label { font-size: 11px; font-weight: 600; color: var(--text-soft); }
 .control { width: 100%; min-width: 0; min-height: 46px; border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: #fcfaffa6; color: var(--text-soft); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
-.control:focus { outline: 2px solid var(--accent-border); outline-offset: 1px; }
+.control:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 .helper { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.6; }
 .ready-chip, .meta-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border-radius: 20px; background: #ebe4f7; color: #705293; font-size: 10px; font-weight: 600; white-space: nowrap; }
 .ready-chip::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #8ba266; }
 .heading-icon, .file-icon { width: 42px; height: 42px; display: grid; place-items: center; flex-shrink: 0; border: 1px solid #fff; border-radius: 13px; color: var(--accent); background: linear-gradient(140deg, #f4edff, #e9ddfb); }
 .thanks-icon, .success-icon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 18px; margin: 0 auto 20px; background: linear-gradient(140deg, #e9f7d6, #cbe7a4); border: 1px solid white; color: #567339; font-size: 23px; box-shadow: 0 8px 20px #62874516; }
+.privacy-pill { display: inline-flex; align-items: center; gap: 7px; margin: 0 0 18px; padding: 7px 11px; border: 1px solid #9e8fb740; border-radius: 30px; color: #6b5b81; background: #ffffff26; font-size: 10px; font-weight: 550; box-shadow: inset 0 1px 0 #fff7; }
+.privacy-pill svg { width: 12px; height: 12px; }
+.copy-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; }
+.copy-row .control { text-overflow: ellipsis; }
+@media (max-width: 370px) { .copy-row { grid-template-columns: 1fr; } }

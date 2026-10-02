@@ -24,6 +24,8 @@ import {
   handleGithubStart,
   handleLogout,
 } from './auth-routes';
+import { routeSecrets } from './secret-routes';
+import { serveStaticHtml } from './static-html';
 
 export { LiveShareDO };
 
@@ -65,6 +67,9 @@ export default {
       const assetUrl = new URL(`/${assetPath}`, 'https://assets.local/');
       return env.ASSETS.fetch(new Request(assetUrl));
     }
+
+    const secretResponse = await routeSecrets(request, env, url);
+    if (secretResponse) return secretResponse;
 
     const sharePage = url.pathname.match(/^\/s\/([A-Za-z0-9]{6})$/);
     if (sharePage && request.method === 'GET') {
@@ -214,20 +219,6 @@ async function serveSendShell(env: Env): Promise<Response> {
 
 async function serveFaqShell(env: Env): Promise<Response> {
   return serveStaticHtml(env, '/faq.html', 'FAQ page unavailable');
-}
-
-async function serveStaticHtml(
-  env: Env,
-  assetPath: string,
-  unavailableMessage: string,
-): Promise<Response> {
-  const assetUrl = new URL(assetPath, 'https://assets.local/');
-  const res = await env.ASSETS.fetch(new Request(assetUrl));
-  if (!res.ok) return new Response(unavailableMessage, { status: 503 });
-  const html = await res.text();
-  return new Response(html, {
-    headers: { 'content-type': 'text/html; charset=utf-8' },
-  });
 }
 
 async function serveReceiverShell(env: Env): Promise<Response> {

@@ -16,6 +16,9 @@ const required = [
   'send.css',
   'send.bundle.js',
   'notification-worker.js',
+  'secret.html',
+  'secret.css',
+  'secret.bundle.js',
 ];
 
 for (const name of required) {
@@ -33,10 +36,16 @@ test('app.bundle.js contains bundled application code', async () => {
 });
 
 test('stylesheets are self-contained for the offline embedded receiver', async () => {
-  for (const name of ['styles.css', 'send.css']) {
+  for (const name of ['styles.css', 'send.css', 'secret.css']) {
     const css = await readFile(join(dist, name), 'utf8');
     assert.doesNotMatch(css, /@import\b/);
     assert.doesNotMatch(css, /url\(\s*['"]?https?:/);
     assert.ok(css.length > 1000, `${name} is missing bundled styles`);
   }
+});
+
+test('secret.bundle.js stays free of the file-transfer crypto stack', async () => {
+  const text = await readFile(join(dist, 'secret.bundle.js'), 'utf8');
+  assert.ok(text.length < 15_000, `secret bundle grew to ${text.length} bytes`);
+  assert.doesNotMatch(text, /xchacha/i);
 });

@@ -12,7 +12,7 @@
 .expiry-grid input { position: absolute; opacity: 0; }
 .expiry-grid span { display: grid; place-items: center; text-align: center; min-height: 44px; padding: 8px 5px; border: 1px solid var(--border); border-radius: 10px; color: var(--muted); font-size: 11px; cursor: pointer; }
 .expiry-grid input:checked + span { background: #ede4fa; border-color: #baa0d7; color: #624084; }
-.expiry-grid input:focus-visible + span { outline: 3px solid var(--accent-border); outline-offset: 2px; }
+.expiry-grid input:focus-visible + span { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 .option-group.is-locked { opacity: .55; }
 .option-group.is-locked span { cursor: not-allowed; }
 .option-row { display: flex; align-items: center; gap: 18px; padding: 0; cursor: pointer; }
@@ -27,7 +27,7 @@
 .toggle span::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: white; box-shadow: 0 1px 3px #51317129; transition: transform .2s; }
 .toggle input:checked + span { background: #9471c4; }
 .toggle input:checked + span::after { transform: translateX(14px); }
-.toggle input:focus-visible + span { outline: 3px solid var(--accent-border); outline-offset: 3px; }
+.toggle input:focus-visible + span { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
 .toggle input:disabled + span { opacity: .5; }
 .upload-card.is-quick .encryption-badge { color: var(--warn); }
 .upload-card.is-quick .security-note { color: #946322; background: #fff3d840; border-radius: 0 0 26px 26px; }

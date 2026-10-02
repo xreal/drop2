@@ -15,7 +15,7 @@
           <a href="/" class="site-logo" aria-label="drop2.app home">
             <span class="logo-mark" aria-hidden="true"></span><span>drop2</span>
           </a>
-          <nav class="site-nav" aria-label="Main navigation"><a href="/">Send</a><a href="/faq" aria-current="page">FAQ</a><a href="https://github.com/xreal/drop2" rel="noopener noreferrer">GitHub</a></nav>
+          <nav class="site-nav" aria-label="Main navigation"><a href="/">Send</a><a href="/secret">Secrets</a><a href="/faq" aria-current="page">FAQ</a><a href="https://github.com/xreal/drop2" rel="noopener noreferrer">GitHub</a></nav>
         </div>
       </header>
 
@@ -28,13 +28,14 @@
             <details><summary>How long does a link stay available?</summary><p>You choose when creating an encrypted share: delete it after the first completed download, or keep it for one day, two days, or one week. Short quick links are deleted after download and always expire within two hours.</p></details>
             <details><summary>Who can read my files?</summary><p>Encrypted shares can only be decrypted by someone with the complete link. Short quick links are an explicit exception: drop2 stores their contents without end-to-end encryption so the URL can be typed easily. They always require a separately shared PIN.</p></details>
             <details><summary>Do I need to use a PIN?</summary><p>PIN protection is enabled by default for encrypted shares. Open the PIN control beneath the file picker to turn it off. A short quick link always requires a PIN because it has no decryption capability in the URL.</p></details>
+            <details><summary>How do secrets work?</summary><p>Paste a password or note at <a href="/secret">drop2.app/secret</a>. It is encrypted in your browser and the key stays in the part of the link after the <code>#</code>, which never reaches drop2. The link opens once, then the secret is deleted. Unopened secrets expire after one hour, one day, or one week. An optional passphrase is checked by drop2, and five wrong tries destroy the secret.</p></details>
             <details><summary>What about misuse or abuse?</summary><p>drop2 is for legitimate private file transfer, not public content hosting. Cross-share probing and repeated incorrect PIN attempts are rate-limited. Shares that violate acceptable use can be removed without inspecting their encrypted contents.</p></details>
             <details><summary>Can I send larger files?</summary><p>Yes. Sign in with GitHub on the send page for up to 1&nbsp;GiB per send (subject to eligibility and daily/weekly quotas), or use the open-source drop2 CLI for larger live or stored encrypted shares. Install it with <code>curl -fsSL https://raw.githubusercontent.com/xreal/drop2/main/scripts/install.sh | bash</code>.</p></details>
           </section>
         </main>
       </div>
 
-      <footer class="site-footer"><p>© 2026 drop2.app — made for sending files, not storing them.</p><nav aria-label="Footer navigation"><a href="/">Send</a><a href="/faq">FAQ</a><a href="https://github.com/xreal/drop2" rel="noopener noreferrer">GitHub</a></nav></footer>
+      <footer class="site-footer"><p>© 2026 drop2.app — made for sending files, not storing them.</p><nav aria-label="Footer navigation"><a href="/">Send</a><a href="/secret">Secrets</a><a href="/faq">FAQ</a><a href="https://github.com/xreal/drop2" rel="noopener noreferrer">GitHub</a></nav></footer>
     </div>
   </body>
 </html>
