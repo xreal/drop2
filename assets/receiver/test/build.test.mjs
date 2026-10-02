@@ -19,6 +19,10 @@ const required = [
   'secret.html',
   'secret.css',
   'secret.bundle.js',
+  'og.jpg',
+  'fonts/Geist-Variable.woff2',
+  'fonts/GeistMono-Variable.woff2',
+  'fonts/OFL.txt',
 ];
 
 for (const name of required) {
@@ -48,4 +52,13 @@ test('secret.bundle.js stays free of the file-transfer crypto stack', async () =
   const text = await readFile(join(dist, 'secret.bundle.js'), 'utf8');
   assert.ok(text.length < 15_000, `secret bundle grew to ${text.length} bytes`);
   assert.doesNotMatch(text, /xchacha/i);
+});
+
+test('every font a stylesheet references ships in dist', async () => {
+  for (const name of ['styles.css', 'secret.css']) {
+    const css = await readFile(join(dist, name), 'utf8');
+    const fonts = [...css.matchAll(/url\("?\.\/(fonts\/[^")]+)"?\)/g)].map((match) => match[1]);
+    assert.ok(fonts.length >= 2, `${name} should load Geist and Geist Mono`);
+    for (const font of fonts) assert.ok(existsSync(join(dist, font)), `${name} references missing ${font}`);
+  }
 });

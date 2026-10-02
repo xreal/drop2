@@ -12,12 +12,17 @@ copyFileSync(join(root, 'index.html'), join(dist, 'index.html'));
 copyFileSync(join(root, 'send.html'), join(dist, 'send.html'));
 copyFileSync(join(root, 'faq.html'), join(dist, 'faq.html'));
 copyFileSync(join(root, 'secret.html'), join(dist, 'secret.html'));
+copyFileSync(join(root, 'og.jpg'), join(dist, 'og.jpg'));
+mkdirSync(join(dist, 'fonts'), { recursive: true });
+copyFileSync(join(root, 'fonts/OFL.txt'), join(dist, 'fonts/OFL.txt'));
 await build({
   entryPoints: [join(root, 'styles.css'), join(root, 'send.css'), join(root, 'secret.css')],
   bundle: true,
   outdir: dist,
   minify: true,
   target: ['es2020'],
+  loader: { '.woff2': 'file' },
+  assetNames: 'fonts/[name]',
 });
 
 await build({

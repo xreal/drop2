@@ -222,4 +222,4 @@ Windows sender support is not part of the current MVP.
 
 ## License
 
-Dual-licensed under **MIT OR Apache-2.0**, at your option (see `Cargo.toml`).
+Dual-licensed under **MIT OR Apache-2.0**, at your option. See [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE).

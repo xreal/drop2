@@ -7,7 +7,6 @@ const revealPath = location.pathname.match(/^\/secret\/([A-Za-z0-9]{12})$/);
 addEventListener('hashchange', () => location.reload());
 
 if (revealPath) {
-  document.title = 'A secret for you · drop2';
   startReveal(revealPath[1]);
 } else {
   startCreate();
