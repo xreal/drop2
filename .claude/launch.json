@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "drop2-worker",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--prefix", "worker", "wrangler", "dev", "--config", "worker/wrangler.jsonc", "--port", "8787", "--local"],
+      "port": 8787
+    }
+  ]
+}
